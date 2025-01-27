@@ -13,4 +13,10 @@
     <PackageReference Include="NPOI" Version="2.7.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="docs\c0711.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
