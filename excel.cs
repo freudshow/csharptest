@@ -81,7 +81,7 @@ public class JsonToExcelConverter
         worksheet.Cells.AutoFitColumns();
     }
 
-    public static void Main(string[] args)
+    public static void ExcelMain(string[] args)
     {
         string jsonFilePath = "docs/c0711.json"; // 替换为您的 JSON 文件路径
         string excelFilePath = "output.xlsx"; // 输出 Excel 文件路径
