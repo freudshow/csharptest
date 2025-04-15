@@ -1,6 +1,4 @@
-﻿using System;
-
-// 访问者接口
+﻿// 访问者接口
 internal interface IVisitor
 {
     void Visit(Computer computer);
@@ -82,7 +80,7 @@ internal class SoftwareMaintenanceVisitor : IVisitor
 
 internal class Program
 {
-    private static void VisitorMain()
+    private static void Main()
     {
         IElement[] devices = { new Computer(), new Printer() };
 
@@ -100,5 +98,7 @@ internal class Program
         {
             device.Accept(softwareVisitor);
         }
+
+        Console.ReadLine();
     }
 }

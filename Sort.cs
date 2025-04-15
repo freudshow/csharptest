@@ -250,7 +250,7 @@ internal class SortingAlgorithms
     }
 
     // 测试函数
-    private static void Main(string[] args)
+    private static void SortMain(string[] args)
     {
         // 各个数组大小和数值不同
         int[] arr1 = { 64, 34, 25, 12, 22, 11, 90 };
