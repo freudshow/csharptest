@@ -11,7 +11,7 @@ namespace ExprAntlr
     {
         private static void Main(string[] args)
         {
-            var input = "sin(1+2)*3";
+            var input = "(#909 == 32768) || (#909 == 4864) || (#909 == 5376) || (#909 == 5120) || (#909 == 4608) || (#909 == 5632) || (#909 == 21760)";
             var inputStream = new AntlrInputStream(input);
             var lexer = new ExprLexer(inputStream);
             var tokenStream = new CommonTokenStream(lexer);
@@ -19,6 +19,8 @@ namespace ExprAntlr
 
             var tree = parser.prog();
             Console.WriteLine(tree.ToStringTree(parser));
+
+            Console.ReadLine();
         }
     }
 }

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-public enum TokenType
+public enum ArithmeticTokenType
 {
     NUMBER,
     PLUS,
@@ -13,12 +13,12 @@ public enum TokenType
     EOF
 }
 
-public class Token
+public class ArithmeticToken
 {
-    public TokenType Type { get; }
+    public ArithmeticTokenType Type { get; }
     public string Value { get; }
 
-    public Token(TokenType type, string value = null)
+    public ArithmeticToken(ArithmeticTokenType type, string value = null)
     {
         Type = type;
         Value = value;
@@ -35,9 +35,9 @@ public class Tokenizer
         this.input = input;
     }
 
-    public List<Token> Tokenize()
+    public List<ArithmeticToken> Tokenize()
     {
-        List<Token> tokens = new List<Token>();
+        List<ArithmeticToken> tokens = new List<ArithmeticToken>();
         while (pos < input.Length)
         {
             char c = input[pos];
@@ -49,36 +49,36 @@ public class Tokenizer
             if (char.IsDigit(c) || c == '.')
             {
                 string number = ParseNumber();
-                tokens.Add(new Token(TokenType.NUMBER, number));
+                tokens.Add(new ArithmeticToken(ArithmeticTokenType.NUMBER, number));
             }
             else if (c == '+')
             {
-                tokens.Add(new Token(TokenType.PLUS));
+                tokens.Add(new ArithmeticToken(ArithmeticTokenType.PLUS));
                 pos++;
             }
             else if (c == '-')
             {
-                tokens.Add(new Token(TokenType.MINUS));
+                tokens.Add(new ArithmeticToken(ArithmeticTokenType.MINUS));
                 pos++;
             }
             else if (c == '*')
             {
-                tokens.Add(new Token(TokenType.MULTIPLY));
+                tokens.Add(new ArithmeticToken(ArithmeticTokenType.MULTIPLY));
                 pos++;
             }
             else if (c == '/')
             {
-                tokens.Add(new Token(TokenType.DIVIDE));
+                tokens.Add(new ArithmeticToken(ArithmeticTokenType.DIVIDE));
                 pos++;
             }
             else if (c == '(')
             {
-                tokens.Add(new Token(TokenType.LPAREN));
+                tokens.Add(new ArithmeticToken(ArithmeticTokenType.LPAREN));
                 pos++;
             }
             else if (c == ')')
             {
-                tokens.Add(new Token(TokenType.RPAREN));
+                tokens.Add(new ArithmeticToken(ArithmeticTokenType.RPAREN));
                 pos++;
             }
             else
@@ -86,7 +86,7 @@ public class Tokenizer
                 throw new Exception("Invalid character: " + c);
             }
         }
-        tokens.Add(new Token(TokenType.EOF));
+        tokens.Add(new ArithmeticToken(ArithmeticTokenType.EOF));
         return tokens;
     }
 
@@ -125,12 +125,12 @@ public class Tokenizer
     }
 }
 
-public class Parser
+public class ArithmeticParser
 {
-    private List<Token> tokens;
+    private List<ArithmeticToken> tokens;
     private int pos = 0;
 
-    public Parser(List<Token> tokens)
+    public ArithmeticParser(List<ArithmeticToken> tokens)
     {
         this.tokens = tokens;
     }
@@ -140,7 +140,7 @@ public class Parser
         try
         {
             ParseExpression();
-            return pos == tokens.Count - 1 && tokens[pos].Type == TokenType.EOF;
+            return pos == tokens.Count - 1 && tokens[pos].Type == ArithmeticTokenType.EOF;
         }
         catch
         {
@@ -151,7 +151,7 @@ public class Parser
     private void ParseExpression()
     {
         ParseTerm();
-        while (tokens[pos].Type == TokenType.PLUS || tokens[pos].Type == TokenType.MINUS)
+        while (tokens[pos].Type == ArithmeticTokenType.PLUS || tokens[pos].Type == ArithmeticTokenType.MINUS)
         {
             Consume(tokens[pos].Type);
             ParseTerm();
@@ -161,7 +161,7 @@ public class Parser
     private void ParseTerm()
     {
         ParseFactor();
-        while (tokens[pos].Type == TokenType.MULTIPLY || tokens[pos].Type == TokenType.DIVIDE)
+        while (tokens[pos].Type == ArithmeticTokenType.MULTIPLY || tokens[pos].Type == ArithmeticTokenType.DIVIDE)
         {
             Consume(tokens[pos].Type);
             ParseFactor();
@@ -170,20 +170,20 @@ public class Parser
 
     private void ParseFactor()
     {
-        if (tokens[pos].Type == TokenType.MINUS)
+        if (tokens[pos].Type == ArithmeticTokenType.MINUS)
         {
-            Consume(TokenType.MINUS);
+            Consume(ArithmeticTokenType.MINUS);
             ParseFactor();
         }
-        else if (tokens[pos].Type == TokenType.NUMBER)
+        else if (tokens[pos].Type == ArithmeticTokenType.NUMBER)
         {
-            Consume(TokenType.NUMBER);
+            Consume(ArithmeticTokenType.NUMBER);
         }
-        else if (tokens[pos].Type == TokenType.LPAREN)
+        else if (tokens[pos].Type == ArithmeticTokenType.LPAREN)
         {
-            Consume(TokenType.LPAREN);
+            Consume(ArithmeticTokenType.LPAREN);
             ParseExpression();
-            Consume(TokenType.RPAREN);
+            Consume(ArithmeticTokenType.RPAREN);
         }
         else
         {
@@ -191,7 +191,7 @@ public class Parser
         }
     }
 
-    private void Consume(TokenType expected)
+    private void Consume(ArithmeticTokenType expected)
     {
         if (tokens[pos].Type == expected)
         {
@@ -204,7 +204,7 @@ public class Parser
     }
 }
 
-internal class Arithmetic
+internal class ArithmeticApps
 {
     private static void ArithmeticMain(string[] args)
     {
@@ -213,8 +213,8 @@ internal class Arithmetic
         try
         {
             Tokenizer tokenizer = new Tokenizer(input);
-            List<Token> tokens = tokenizer.Tokenize();
-            Parser parser = new Parser(tokens);
+            List<ArithmeticToken> tokens = tokenizer.Tokenize();
+            ArithmeticParser parser = new ArithmeticParser(tokens);
             bool isValid = parser.Parse();
             Console.WriteLine("Is valid: " + isValid);
             Console.ReadLine();
