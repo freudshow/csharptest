@@ -80,7 +80,7 @@ internal class SoftwareMaintenanceVisitor : IVisitor
 
 internal class Program
 {
-    private static void Main()
+    private static void VisitorMain()
     {
         IElement[] devices = { new Computer(), new Printer() };
 
