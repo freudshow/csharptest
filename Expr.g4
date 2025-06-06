@@ -1,36 +1,45 @@
 grammar Expr;
 
-prog: expr EOF | assignStmt EOF;
+prog: stmt EOF;
+
+stmt: assignStmt | expr;
 
 assignStmt: RT_MARKER ASSIGN expr;
 
-expr: orExpr;
+expr
+    : LPAREN expr RPAREN                    // 括号
+    | functionCall                          // 函数调用
+    | unaryOp expr                          // 一元运算符
+    | expr multOp expr                      // 乘除
+    | expr addOp expr                       // 加减
+    | expr shiftOp expr                     // 位移
+    | expr compareOp expr                   // 比较
+    | expr equalOp expr                     // 相等
+    | expr bitAndOp expr                    // 位与
+    | expr bitXorOp expr                    // 位异或
+    | expr bitOrOp expr                     // 位或
+    | expr logicAndOp expr                  // 逻辑与
+    | expr logicOrOp expr                   // 逻辑或
+    | atom                                  // 原子表达式
+    ;
 
-orExpr: andExpr (OR andExpr)*;
+atom: NUMBER | RT_MARKER;
 
-andExpr: bitOrExpr (AND bitOrExpr)*;
+functionCall: funcName LPAREN expr RPAREN;
 
-bitOrExpr: bitXorExpr (PIPE bitXorExpr)*;
-
-bitXorExpr: bitAndExpr (CARET bitAndExpr)*;
-
-bitAndExpr: equalityExpr (AMP equalityExpr)*;
-
-equalityExpr: relationalExpr (EQ relationalExpr)*;
-
-relationalExpr: shiftExpr ((GT | GTE | LT | LTE) shiftExpr)*;
-
-shiftExpr: additiveExpr ((LSHIFT | RSHIFT) additiveExpr)*;
-
-additiveExpr: multiplicativeExpr ((PLUS | MINUS) multiplicativeExpr)*;
-
-multiplicativeExpr: unaryExpr ((MULT | DIV) unaryExpr)*;
-
-unaryExpr: (NOT | TILDE | MINUS) unaryExpr | primaryExpr;
-
-primaryExpr: NUMBER | RT_MARKER | LPAREN expr RPAREN | functionCall;
-
-functionCall: (SIN | COS | EXP) LPAREN expr RPAREN;
+// 运算符规则
+unaryOp: NOT | TILDE;
+multOp: MULT | DIV;
+addOp: PLUS | MINUS;
+shiftOp: LSHIFT | RSHIFT;
+compareOp: GT | GTE | LT | LTE;
+equalOp: EQ;
+bitAndOp: AMP;
+bitXorOp: CARET;
+bitOrOp: PIPE;
+logicAndOp: AND;
+logicOrOp: OR;
+funcName: SIN | COS | EXP;
 
 // Lexer rules
 SIN: 'sin';

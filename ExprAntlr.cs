@@ -1,4 +1,5 @@
 ﻿using Antlr4.Runtime;
+using Antlr4.Runtime.Tree; // 添加此命名空间以解决 IParseTree 未找到的问题
 
 namespace ExprAntlr
 {
@@ -46,17 +47,56 @@ namespace ExprAntlr
                     if (errors.Count == 0 && tokenStream.LA(1) == TokenConstants.EOF)
                     {
                         Console.WriteLine("合法表达式");
+                        TreePrinter.Print(tree, parser);
                     }
                     else
                     {
                         Console.WriteLine("非法表达式: " + string.Join("; ", errors));
                     }
-
-                    //Console.WriteLine(tree.ToStringTree(parser));
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"异常: {ex.Message}");
+                }
+            }
+        }
+
+        public class TreePrinter
+        {
+            private static string GetNodeText(IParseTree node, Parser parser)
+            {
+                if (node is TerminalNodeImpl terminal)
+                {
+                    return terminal.GetText();
+                }
+                else
+                {
+                    var ruleContext = node as ParserRuleContext;
+                    var ruleName = parser.RuleNames[ruleContext.RuleIndex];
+                    return ruleName;
+                }
+            }
+
+            public static void Print(IParseTree tree, Parser parser)
+            {
+                PrintTree(tree, parser, "", true);
+            }
+
+            private static void PrintTree(IParseTree node, Parser parser, string indent, bool last)
+            {
+                // 打印当前节点
+                Console.Write(indent);
+                Console.Write(last ? "└─ " : "├─ ");
+                Console.WriteLine(GetNodeText(node, parser));
+
+                // 为子节点准备缩进
+                indent += last ? "   " : "│  ";
+
+                // 递归打印子节点
+                for (int i = 0; i < node.ChildCount; i++)
+                {
+                    var child = node.GetChild(i);
+                    PrintTree(child, parser, indent, i == node.ChildCount - 1);
                 }
             }
         }

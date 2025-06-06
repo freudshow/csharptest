@@ -41,6 +41,16 @@ public interface IExprListener : IParseTreeListener {
 	/// <param name="context">The parse tree.</param>
 	void ExitProg([NotNull] ExprParser.ProgContext context);
 	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.stmt"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterStmt([NotNull] ExprParser.StmtContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.stmt"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitStmt([NotNull] ExprParser.StmtContext context);
+	/// <summary>
 	/// Enter a parse tree produced by <see cref="ExprParser.assignStmt"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
@@ -61,125 +71,15 @@ public interface IExprListener : IParseTreeListener {
 	/// <param name="context">The parse tree.</param>
 	void ExitExpr([NotNull] ExprParser.ExprContext context);
 	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.orExpr"/>.
+	/// Enter a parse tree produced by <see cref="ExprParser.atom"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
-	void EnterOrExpr([NotNull] ExprParser.OrExprContext context);
+	void EnterAtom([NotNull] ExprParser.AtomContext context);
 	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.orExpr"/>.
+	/// Exit a parse tree produced by <see cref="ExprParser.atom"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
-	void ExitOrExpr([NotNull] ExprParser.OrExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.andExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterAndExpr([NotNull] ExprParser.AndExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.andExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitAndExpr([NotNull] ExprParser.AndExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.bitOrExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterBitOrExpr([NotNull] ExprParser.BitOrExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.bitOrExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitBitOrExpr([NotNull] ExprParser.BitOrExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.bitXorExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterBitXorExpr([NotNull] ExprParser.BitXorExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.bitXorExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitBitXorExpr([NotNull] ExprParser.BitXorExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.bitAndExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterBitAndExpr([NotNull] ExprParser.BitAndExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.bitAndExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitBitAndExpr([NotNull] ExprParser.BitAndExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.equalityExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterEqualityExpr([NotNull] ExprParser.EqualityExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.equalityExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitEqualityExpr([NotNull] ExprParser.EqualityExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.relationalExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterRelationalExpr([NotNull] ExprParser.RelationalExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.relationalExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitRelationalExpr([NotNull] ExprParser.RelationalExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.shiftExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterShiftExpr([NotNull] ExprParser.ShiftExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.shiftExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitShiftExpr([NotNull] ExprParser.ShiftExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.additiveExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterAdditiveExpr([NotNull] ExprParser.AdditiveExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.additiveExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitAdditiveExpr([NotNull] ExprParser.AdditiveExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.multiplicativeExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterMultiplicativeExpr([NotNull] ExprParser.MultiplicativeExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.multiplicativeExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitMultiplicativeExpr([NotNull] ExprParser.MultiplicativeExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.unaryExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterUnaryExpr([NotNull] ExprParser.UnaryExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.unaryExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitUnaryExpr([NotNull] ExprParser.UnaryExprContext context);
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.primaryExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void EnterPrimaryExpr([NotNull] ExprParser.PrimaryExprContext context);
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.primaryExpr"/>.
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	void ExitPrimaryExpr([NotNull] ExprParser.PrimaryExprContext context);
+	void ExitAtom([NotNull] ExprParser.AtomContext context);
 	/// <summary>
 	/// Enter a parse tree produced by <see cref="ExprParser.functionCall"/>.
 	/// </summary>
@@ -190,4 +90,124 @@ public interface IExprListener : IParseTreeListener {
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	void ExitFunctionCall([NotNull] ExprParser.FunctionCallContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.unaryOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterUnaryOp([NotNull] ExprParser.UnaryOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.unaryOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitUnaryOp([NotNull] ExprParser.UnaryOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.multOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterMultOp([NotNull] ExprParser.MultOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.multOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitMultOp([NotNull] ExprParser.MultOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.addOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterAddOp([NotNull] ExprParser.AddOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.addOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitAddOp([NotNull] ExprParser.AddOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.shiftOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterShiftOp([NotNull] ExprParser.ShiftOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.shiftOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitShiftOp([NotNull] ExprParser.ShiftOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.compareOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterCompareOp([NotNull] ExprParser.CompareOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.compareOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitCompareOp([NotNull] ExprParser.CompareOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.equalOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterEqualOp([NotNull] ExprParser.EqualOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.equalOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitEqualOp([NotNull] ExprParser.EqualOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.bitAndOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterBitAndOp([NotNull] ExprParser.BitAndOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.bitAndOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitBitAndOp([NotNull] ExprParser.BitAndOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.bitXorOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterBitXorOp([NotNull] ExprParser.BitXorOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.bitXorOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitBitXorOp([NotNull] ExprParser.BitXorOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.bitOrOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterBitOrOp([NotNull] ExprParser.BitOrOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.bitOrOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitBitOrOp([NotNull] ExprParser.BitOrOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.logicAndOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterLogicAndOp([NotNull] ExprParser.LogicAndOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.logicAndOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitLogicAndOp([NotNull] ExprParser.LogicAndOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.logicOrOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterLogicOrOp([NotNull] ExprParser.LogicOrOpContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.logicOrOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitLogicOrOp([NotNull] ExprParser.LogicOrOpContext context);
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.funcName"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterFuncName([NotNull] ExprParser.FuncNameContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.funcName"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitFuncName([NotNull] ExprParser.FuncNameContext context);
 }

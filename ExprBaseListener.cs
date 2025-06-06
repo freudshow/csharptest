@@ -48,6 +48,18 @@ public partial class ExprBaseListener : IExprListener {
 	/// <param name="context">The parse tree.</param>
 	public virtual void ExitProg([NotNull] ExprParser.ProgContext context) { }
 	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.stmt"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterStmt([NotNull] ExprParser.StmtContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.stmt"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitStmt([NotNull] ExprParser.StmtContext context) { }
+	/// <summary>
 	/// Enter a parse tree produced by <see cref="ExprParser.assignStmt"/>.
 	/// <para>The default implementation does nothing.</para>
 	/// </summary>
@@ -72,149 +84,17 @@ public partial class ExprBaseListener : IExprListener {
 	/// <param name="context">The parse tree.</param>
 	public virtual void ExitExpr([NotNull] ExprParser.ExprContext context) { }
 	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.orExpr"/>.
+	/// Enter a parse tree produced by <see cref="ExprParser.atom"/>.
 	/// <para>The default implementation does nothing.</para>
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
-	public virtual void EnterOrExpr([NotNull] ExprParser.OrExprContext context) { }
+	public virtual void EnterAtom([NotNull] ExprParser.AtomContext context) { }
 	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.orExpr"/>.
+	/// Exit a parse tree produced by <see cref="ExprParser.atom"/>.
 	/// <para>The default implementation does nothing.</para>
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
-	public virtual void ExitOrExpr([NotNull] ExprParser.OrExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.andExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterAndExpr([NotNull] ExprParser.AndExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.andExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitAndExpr([NotNull] ExprParser.AndExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.bitOrExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterBitOrExpr([NotNull] ExprParser.BitOrExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.bitOrExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitBitOrExpr([NotNull] ExprParser.BitOrExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.bitXorExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterBitXorExpr([NotNull] ExprParser.BitXorExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.bitXorExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitBitXorExpr([NotNull] ExprParser.BitXorExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.bitAndExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterBitAndExpr([NotNull] ExprParser.BitAndExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.bitAndExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitBitAndExpr([NotNull] ExprParser.BitAndExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.equalityExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterEqualityExpr([NotNull] ExprParser.EqualityExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.equalityExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitEqualityExpr([NotNull] ExprParser.EqualityExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.relationalExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterRelationalExpr([NotNull] ExprParser.RelationalExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.relationalExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitRelationalExpr([NotNull] ExprParser.RelationalExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.shiftExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterShiftExpr([NotNull] ExprParser.ShiftExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.shiftExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitShiftExpr([NotNull] ExprParser.ShiftExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.additiveExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterAdditiveExpr([NotNull] ExprParser.AdditiveExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.additiveExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitAdditiveExpr([NotNull] ExprParser.AdditiveExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.multiplicativeExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterMultiplicativeExpr([NotNull] ExprParser.MultiplicativeExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.multiplicativeExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitMultiplicativeExpr([NotNull] ExprParser.MultiplicativeExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.unaryExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterUnaryExpr([NotNull] ExprParser.UnaryExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.unaryExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitUnaryExpr([NotNull] ExprParser.UnaryExprContext context) { }
-	/// <summary>
-	/// Enter a parse tree produced by <see cref="ExprParser.primaryExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void EnterPrimaryExpr([NotNull] ExprParser.PrimaryExprContext context) { }
-	/// <summary>
-	/// Exit a parse tree produced by <see cref="ExprParser.primaryExpr"/>.
-	/// <para>The default implementation does nothing.</para>
-	/// </summary>
-	/// <param name="context">The parse tree.</param>
-	public virtual void ExitPrimaryExpr([NotNull] ExprParser.PrimaryExprContext context) { }
+	public virtual void ExitAtom([NotNull] ExprParser.AtomContext context) { }
 	/// <summary>
 	/// Enter a parse tree produced by <see cref="ExprParser.functionCall"/>.
 	/// <para>The default implementation does nothing.</para>
@@ -227,6 +107,150 @@ public partial class ExprBaseListener : IExprListener {
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	public virtual void ExitFunctionCall([NotNull] ExprParser.FunctionCallContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.unaryOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterUnaryOp([NotNull] ExprParser.UnaryOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.unaryOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitUnaryOp([NotNull] ExprParser.UnaryOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.multOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterMultOp([NotNull] ExprParser.MultOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.multOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitMultOp([NotNull] ExprParser.MultOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.addOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterAddOp([NotNull] ExprParser.AddOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.addOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitAddOp([NotNull] ExprParser.AddOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.shiftOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterShiftOp([NotNull] ExprParser.ShiftOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.shiftOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitShiftOp([NotNull] ExprParser.ShiftOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.compareOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterCompareOp([NotNull] ExprParser.CompareOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.compareOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitCompareOp([NotNull] ExprParser.CompareOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.equalOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterEqualOp([NotNull] ExprParser.EqualOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.equalOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitEqualOp([NotNull] ExprParser.EqualOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.bitAndOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterBitAndOp([NotNull] ExprParser.BitAndOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.bitAndOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitBitAndOp([NotNull] ExprParser.BitAndOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.bitXorOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterBitXorOp([NotNull] ExprParser.BitXorOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.bitXorOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitBitXorOp([NotNull] ExprParser.BitXorOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.bitOrOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterBitOrOp([NotNull] ExprParser.BitOrOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.bitOrOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitBitOrOp([NotNull] ExprParser.BitOrOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.logicAndOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterLogicAndOp([NotNull] ExprParser.LogicAndOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.logicAndOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitLogicAndOp([NotNull] ExprParser.LogicAndOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.logicOrOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterLogicOrOp([NotNull] ExprParser.LogicOrOpContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.logicOrOp"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitLogicOrOp([NotNull] ExprParser.LogicOrOpContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.funcName"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterFuncName([NotNull] ExprParser.FuncNameContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.funcName"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitFuncName([NotNull] ExprParser.FuncNameContext context) { }
 
 	/// <inheritdoc/>
 	/// <remarks>The default implementation does nothing.</remarks>
