@@ -41,6 +41,16 @@ public interface IExprListener : IParseTreeListener {
 	/// <param name="context">The parse tree.</param>
 	void ExitProg([NotNull] ExprParser.ProgContext context);
 	/// <summary>
+	/// Enter a parse tree produced by <see cref="ExprParser.assignStmt"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterAssignStmt([NotNull] ExprParser.AssignStmtContext context);
+	/// <summary>
+	/// Exit a parse tree produced by <see cref="ExprParser.assignStmt"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitAssignStmt([NotNull] ExprParser.AssignStmtContext context);
+	/// <summary>
 	/// Enter a parse tree produced by <see cref="ExprParser.expr"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>

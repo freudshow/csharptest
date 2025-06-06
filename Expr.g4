@@ -1,6 +1,8 @@
 grammar Expr;
 
-prog: expr EOF;
+prog: expr EOF | assignStmt EOF;
+
+assignStmt: RT_MARKER ASSIGN expr;
 
 expr: orExpr;
 
@@ -56,4 +58,6 @@ LPAREN: '(';
 RPAREN: ')';
 NUMBER: [0-9]+ ('.' [0-9]*)? | '.' [0-9]+;
 RT_MARKER: '#' [0-9]+;
+ASSIGN: '=';
 WS: [ \t\r\n]+ -> skip;
+ERROR_CHAR: . {throw new Exception($"·Ç·¨×Ö·û:{Text}");};

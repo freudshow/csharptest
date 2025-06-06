@@ -23,7 +23,9 @@ LPAREN=22
 RPAREN=23
 NUMBER=24
 RT_MARKER=25
-WS=26
+ASSIGN=26
+WS=27
+ERROR_CHAR=28
 'sin'=1
 'cos'=2
 'exp'=3
@@ -47,3 +49,4 @@ WS=26
 '>>'=21
 '('=22
 ')'=23
+'='=26
