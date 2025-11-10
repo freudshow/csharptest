@@ -17,7 +17,7 @@ namespace ExprAntlr
 
     internal class ExprAntlr
     {
-        private static void Main(string[] args)
+        private static void exprMain(string[] args)
         {
             while (true)
             {
