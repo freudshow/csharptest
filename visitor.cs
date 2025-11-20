@@ -107,7 +107,7 @@ internal class ReplacePartVisitor : IVisitor
     }
 }
 
-internal class Program
+public class Program
 {
     private static void VisitorMain(string[] args)
     //private static void Main(string[] args)

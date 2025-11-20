@@ -130,7 +130,7 @@ namespace Visitor
     // ------------------------------
     internal class shapeProgram
     {
-        private static void Main(string[] args)
+        private static void shapeProgramMain(string[] args)
         {
             // 创建对象结构并添加元素
             ObjectStructure structure = new ObjectStructure();
