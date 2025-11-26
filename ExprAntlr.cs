@@ -15,7 +15,7 @@ namespace ExprAntlr
         }
     }
 
-    internal class ExprAntlr
+    internal static class ExprAntlr
     {
         private static void exprMain(string[] args)
         {
@@ -61,7 +61,7 @@ namespace ExprAntlr
             }
         }
 
-        public class TreePrinter
+        public static class TreePrinter
         {
             private static string GetNodeText(IParseTree node, Parser parser)
             {
