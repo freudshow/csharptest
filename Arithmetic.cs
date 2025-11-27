@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 
+// 词法符号类型
 public enum ArithmeticTokenType
 {
     NUMBER,
@@ -13,6 +15,7 @@ public enum ArithmeticTokenType
     EOF
 }
 
+// 词法符号
 public class ArithmeticToken
 {
     public ArithmeticTokenType Type { get; }
@@ -23,16 +26,19 @@ public class ArithmeticToken
         Type = type;
         Value = value;
     }
+
+    public override string ToString() => Value is null ? Type.ToString() : $"{Type}({Value})";
 }
 
+// 将输入分词
 public class Tokenizer
 {
-    private string input;
+    private readonly string input;
     private int pos = 0;
 
     public Tokenizer(string input)
     {
-        this.input = input;
+        this.input = input ?? string.Empty;
     }
 
     public List<ArithmeticToken> Tokenize()
@@ -83,11 +89,18 @@ public class Tokenizer
             }
             else
             {
-                throw new Exception("Invalid character: " + c);
+                throw new Exception("Invalid character: " + ShowChar(c));
             }
         }
         tokens.Add(new ArithmeticToken(ArithmeticTokenType.EOF));
         return tokens;
+    }
+
+    // 把不可见或非 ASCII 字符以 \uXXXX 形式显示，便于定位
+    private static string ShowChar(char c)
+    {
+        if (c < 32 || c > 126) return $"\\u{(int)c:X4}";
+        return c.ToString();
     }
 
     private string ParseNumber()
@@ -103,8 +116,17 @@ public class Tokenizer
             }
             else if (c == '.' && !hasDot)
             {
-                hasDot = true;
-                pos++;
+                // ensure '.' is followed by a digit (but allow leading '.' as in .5)
+                if (pos + 1 < input.Length && char.IsDigit(input[pos + 1]))
+                {
+                    hasDot = true;
+                    pos++;
+                }
+                else
+                {
+                    // single '.' not part of a valid number
+                    break;
+                }
             }
             else
             {
@@ -116,8 +138,8 @@ public class Tokenizer
             throw new Exception("Expected number");
         }
         string number = input.Substring(start, pos - start);
-        // Validate number format (e.g., not just ".")
-        if (number == "." || number.StartsWith(".") && !char.IsDigit(number[1]) || number.EndsWith("."))
+        // Validate number more strictly using TryParse
+        if (!double.TryParse(number, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out _))
         {
             throw new Exception("Invalid number format: " + number);
         }
@@ -125,88 +147,200 @@ public class Tokenizer
     }
 }
 
+// AST 节点定义
+public abstract class ExprNode
+{
+    public abstract double Evaluate();
+}
+
+public sealed class NumberNode : ExprNode
+{
+    public double Value { get; }
+
+    public NumberNode(double value) => Value = value;
+
+    public override double Evaluate() => Value;
+}
+
+public enum UnaryOp
+{ Negate }
+
+public sealed class UnaryNode : ExprNode
+{
+    public UnaryOp Op { get; }
+    public ExprNode Operand { get; }
+
+    public UnaryNode(UnaryOp op, ExprNode operand)
+    { Op = op; Operand = operand; }
+
+    public override double Evaluate()
+    {
+        return Op switch
+        {
+            UnaryOp.Negate => -Operand.Evaluate(),
+            _ => throw new InvalidOperationException("Unknown unary operator")
+        };
+    }
+}
+
+public enum BinaryOp
+{ Add, Subtract, Multiply, Divide }
+
+public sealed class BinaryNode : ExprNode
+{
+    public ExprNode Left { get; }
+    public ExprNode Right { get; }
+    public BinaryOp Op { get; }
+
+    public BinaryNode(ExprNode left, BinaryOp op, ExprNode right)
+    { Left = left; Op = op; Right = right; }
+
+    public override double Evaluate()
+    {
+        double l = Left.Evaluate();
+        double r = Right.Evaluate();
+        return Op switch
+        {
+            BinaryOp.Add => l + r,
+            BinaryOp.Subtract => l - r,
+            BinaryOp.Multiply => l * r,
+            BinaryOp.Divide => r == 0 ? throw new DivideByZeroException() : l / r,
+            _ => throw new InvalidOperationException("Unknown binary operator")
+        };
+    }
+}
+
+// 解析器：生成 AST（遵守运算符优先级）
 public class ArithmeticParser
 {
-    private List<ArithmeticToken> tokens;
+    private readonly List<ArithmeticToken> tokens;
     private int pos = 0;
 
     public ArithmeticParser(List<ArithmeticToken> tokens)
     {
-        this.tokens = tokens;
+        this.tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
     }
 
-    public bool Parse()
+    // Parse 返回根节点（若语法错误抛出异常）
+    public ExprNode Parse()
     {
-        try
-        {
-            ParseExpression();
-            return pos == tokens.Count - 1 && tokens[pos].Type == ArithmeticTokenType.EOF;
-        }
-        catch
-        {
-            return false;
-        }
+        ExprNode root = ParseExpression();
+        if (Current.Type != ArithmeticTokenType.EOF)
+            throw new Exception($"Unexpected token: {Current}");
+        return root;
     }
 
-    private void ParseExpression()
+    // expression := term (('+'|'-') term)*
+    private ExprNode ParseExpression()
     {
-        ParseTerm();
-        while (tokens[pos].Type == ArithmeticTokenType.PLUS || tokens[pos].Type == ArithmeticTokenType.MINUS)
+        ExprNode left = ParseTerm();
+        while (Current.Type == ArithmeticTokenType.PLUS || Current.Type == ArithmeticTokenType.MINUS)
         {
-            Consume(tokens[pos].Type);
-            ParseTerm();
+            var op = Current.Type;
+            Consume(op);
+            ExprNode right = ParseTerm();
+            left = new BinaryNode(left, op == ArithmeticTokenType.PLUS ? BinaryOp.Add : BinaryOp.Subtract, right);
         }
+        return left;
     }
 
-    private void ParseTerm()
+    // term := factor (('*'|'/') factor)*
+    private ExprNode ParseTerm()
     {
-        ParseFactor();
-        while (tokens[pos].Type == ArithmeticTokenType.MULTIPLY || tokens[pos].Type == ArithmeticTokenType.DIVIDE)
+        ExprNode left = ParseFactor();
+        while (Current.Type == ArithmeticTokenType.MULTIPLY || Current.Type == ArithmeticTokenType.DIVIDE)
         {
-            Consume(tokens[pos].Type);
-            ParseFactor();
+            var op = Current.Type;
+            Consume(op);
+            ExprNode right = ParseFactor();
+            left = new BinaryNode(left, op == ArithmeticTokenType.MULTIPLY ? BinaryOp.Multiply : BinaryOp.Divide, right);
         }
+        return left;
     }
 
-    private void ParseFactor()
+    // factor := '-' factor | NUMBER | '(' expression ')'
+    private ExprNode ParseFactor()
     {
-        if (tokens[pos].Type == ArithmeticTokenType.MINUS)
+        if (Current.Type == ArithmeticTokenType.MINUS)
         {
             Consume(ArithmeticTokenType.MINUS);
-            ParseFactor();
+            ExprNode operand = ParseFactor();
+            return new UnaryNode(UnaryOp.Negate, operand);
         }
-        else if (tokens[pos].Type == ArithmeticTokenType.NUMBER)
+        else if (Current.Type == ArithmeticTokenType.NUMBER)
         {
+            string text = Current.Value;
             Consume(ArithmeticTokenType.NUMBER);
+            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+                throw new Exception("Invalid number: " + text);
+            return new NumberNode(value);
         }
-        else if (tokens[pos].Type == ArithmeticTokenType.LPAREN)
+        else if (Current.Type == ArithmeticTokenType.LPAREN)
         {
             Consume(ArithmeticTokenType.LPAREN);
-            ParseExpression();
+            ExprNode node = ParseExpression();
             Consume(ArithmeticTokenType.RPAREN);
+            return node;
         }
         else
         {
-            throw new Exception("Unexpected token: " + tokens[pos].Type);
+            throw new Exception("Unexpected token: " + Current);
         }
     }
+
+    private ArithmeticToken Current => pos < tokens.Count ? tokens[pos] : tokens[^1];
 
     private void Consume(ArithmeticTokenType expected)
     {
-        if (tokens[pos].Type == expected)
+        if (Current.Type == expected)
         {
             pos++;
+            return;
         }
-        else
+        throw new Exception($"Expected {expected}, got {Current}");
+    }
+}
+
+// AST 打印工具（格式化输出）
+public static class AstPrinter
+{
+    public static void Print(ExprNode node)
+    {
+        PrintNode(node, "", true);
+    }
+
+    private static void PrintNode(ExprNode node, string indent, bool last)
+    {
+        Console.Write(indent);
+        Console.Write(last ? "└─ " : "├─ ");
+        switch (node)
         {
-            throw new Exception("Expected " + expected + ", got " + tokens[pos].Type);
+            case NumberNode n:
+                Console.WriteLine(n.Value.ToString(CultureInfo.InvariantCulture));
+                break;
+
+            case UnaryNode u:
+                Console.WriteLine($"Unary({u.Op})");
+                PrintNode(u.Operand, indent + (last ? "   " : "│  "), true);
+                break;
+
+            case BinaryNode b:
+                Console.WriteLine($"Binary({b.Op})");
+                PrintNode(b.Left, indent + (last ? "   " : "│  "), false);
+                PrintNode(b.Right, indent + (last ? "   " : "│  "), true);
+                break;
+
+            default:
+                Console.WriteLine(node.GetType().Name);
+                break;
         }
     }
 }
 
+// 控制台应用入口：读入、词法、解析、打印语法树并求值
 internal class ArithmeticApps
 {
-    private static void ArithmeticMain(string[] args)
+    private static void Main(string[] args)
     {
         Console.WriteLine("Enter an arithmetic expression (e.g., 2 + 3 * (4 - 1)):");
         string input = Console.ReadLine();
@@ -214,14 +348,22 @@ internal class ArithmeticApps
         {
             Tokenizer tokenizer = new Tokenizer(input);
             List<ArithmeticToken> tokens = tokenizer.Tokenize();
+
             ArithmeticParser parser = new ArithmeticParser(tokens);
-            bool isValid = parser.Parse();
-            Console.WriteLine("Is valid: " + isValid);
-            Console.ReadLine();
+            ExprNode root = parser.Parse();
+
+            Console.WriteLine("Parsed AST:");
+            AstPrinter.Print(root);
+
+            double result = root.Evaluate();
+            Console.WriteLine("Result: " + result.ToString(CultureInfo.InvariantCulture));
         }
         catch (Exception ex)
         {
             Console.WriteLine("Error: " + ex.Message);
         }
+
+        // pause for console
+        Console.ReadLine();
     }
 }

@@ -102,7 +102,7 @@ namespace ConsoleApp1
 
     public static class AddressComparer
     {
-        public static void Main(string[] args)
+        public static void AddressComparerMain(string[] args)
         {
             // 测试
             Person p1 = new()
