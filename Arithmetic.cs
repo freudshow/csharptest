@@ -342,7 +342,7 @@ namespace ArithmeticEvaluator
     // 控制台应用入口：读入、词法、解析、打印语法树并求值
     internal static class ArithmeticApps
     {
-        private static void Main(string[] args)
+        private static void ArithmeticMain(string[] args)
         {
             Console.WriteLine("Enter an arithmetic expression (e.g., 2 + 3 * (4 - 1)):");
             string input = Console.ReadLine();
