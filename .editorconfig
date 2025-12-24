@@ -1,0 +1,4 @@
+﻿[*.cs]
+
+# CA1704: 标识符应正确拼写
+dotnet_diagnostic.CA1704.severity = none
