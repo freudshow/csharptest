@@ -1,11 +1,79 @@
-// ExprCalc.cs
-// dotnet run or csc ExprCalc.cs
+/*
+ * ExprCalc.cs
+ * dotnet run or csc ExprCalc.cs
+ * Expression calculator
+ * grammar ExprCalc;
+ * prog      : stmt EOF ;
+ *
+ * stmt      : assignStmt
+ *           | expr
+ *           ;
+ *
+ * assignStmt: HASH ASSIGN expr ;
+ *
+ * expr      : logicalOr ;
+ *
+ * logicalOr : logicalAnd ( OROR logicalAnd )* ;
+ * logicalAnd: bitOr ( ANDAND bitOr )* ;
+ * bitOr     : bitXor ( PIPE bitXor )* ;
+ * bitXor    : bitAnd ( CARET bitAnd )* ;
+ * bitAnd    : equality ( AMP equality )* ;
+ * equality  : relational ( EQ relational )* ;
+ * relational: shift ( (GT | GTE | LT | LTE) shift )* ;
+ * shift     : add ( (LSHIFT | RSHIFT) add )* ;
+ * add       : mul ( (PLUS | MINUS) mul )* ;
+ * mul       : unary ( (MULT | DIV) unary )* ;
+ * unary     : ( NOT | TILDE | MINUS ) unary
+ *           | primary
+ *           ;
+ * primary   : NUMBER
+ *           | HASH
+ *           | LPAREN expr RPAREN
+ *           | functionCall
+ *           ;
+ *
+ * functionCall
+ *           : IDENT LPAREN expr RPAREN
+ *           ;
+ *
+ * // Lexer tokens (representative)
+ * PLUS    : '+' ;
+ * MINUS   : '-' ;
+ * MULT    : '*' ;
+ * DIV     : '/' ;
+ * NOT     : '!' ;
+ * ANDAND  : '&&' ;
+ * OROR    : '||' ;
+ * GT      : '>' ;
+ * GTE     : '>=' ;
+ * LT      : '<' ;
+ * LTE     : '<=' ;
+ * EQ      : '==' ;
+ * AMP     : '&' ;
+ * PIPE    : '|' ;
+ * CARET   : '^' ;
+ * TILDE   : '~' ;
+ * LSHIFT  : '<<' ;
+ * RSHIFT  : '>>' ;
+ * LPAREN  : '(' ;
+ * RPAREN  : ')' ;
+ * ASSIGN  : '=' ;
+ *
+ * // numbers and identifiers
+ * NUMBER  : [0-9]+ ('.' [0-9]*)? | '.' [0-9]+ ;
+ * HASH    : '#' [0-9]+ ;
+ * IDENT   : [a-zA-Z]+ ;
+ *
+ * // whitespace and bad chars
+ * WS      : [ \t\r\n]+ -> skip ;
+ * ERROR_CHAR : . -> channel(HIDDEN) ; // or handle as error in lexer action
+ */
 
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-internal class EvalProgram
+internal class EvaluateProgram
 {
     private enum TokenType
     {
@@ -75,6 +143,7 @@ internal class EvalProgram
                     if (!double.TryParse(sub, NumberStyles.Float, CultureInfo.InvariantCulture, out double val)) throw new Exception("Invalid number: " + sub);
                     var tk = new Token(TokenType.NUM, sub); tk.Num = val; list.Add(tk); continue;
                 }
+
                 if (c == '#')
                 {
                     i++;
@@ -85,6 +154,7 @@ internal class EvalProgram
                     list.Add(new Token(TokenType.HASH, id));
                     continue;
                 }
+
                 if (char.IsLetter(c))
                 {
                     int start = i;
@@ -93,6 +163,7 @@ internal class EvalProgram
                     list.Add(new Token(TokenType.IDENT, id));
                     continue;
                 }
+
                 switch (c)
                 {
                     case '+': list.Add(new Token(TokenType.PLUS, "+")); i++; break;
@@ -112,6 +183,7 @@ internal class EvalProgram
                     default: throw new Exception($"Invalid character: {c}");
                 }
             }
+
             return list;
         }
     }
@@ -162,6 +234,7 @@ internal class EvalProgram
                 if (left != 0.0) { ParseLogicalAnd(); left = 1.0; }
                 else { double r = ParseLogicalAnd(); left = r != 0.0 ? 1.0 : 0.0; }
             }
+
             return left;
         }
 
@@ -173,6 +246,7 @@ internal class EvalProgram
                 if (left == 0.0) { ParseBitwiseOr(); left = 0.0; }
                 else { double r = ParseBitwiseOr(); left = r != 0.0 ? 1.0 : 0.0; }
             }
+
             return left;
         }
 
@@ -215,6 +289,7 @@ internal class EvalProgram
                 else if (Match(TokenType.LTE)) { double r = ParseShift(); left = left <= r ? 1.0 : 0.0; }
                 else break;
             }
+
             return left;
         }
 
@@ -227,6 +302,7 @@ internal class EvalProgram
                 else if (Match(TokenType.RSHIFT)) { double r = ParseAdd(); left = (double)((long)left >> (int)r); }
                 else break;
             }
+
             return left;
         }
 
@@ -239,6 +315,7 @@ internal class EvalProgram
                 else if (Match(TokenType.MINUS)) { double r = ParseMul(); left -= r; }
                 else break;
             }
+
             return left;
         }
 
@@ -251,6 +328,7 @@ internal class EvalProgram
                 else if (Match(TokenType.DIV)) { double r = ParseUnary(); if (r == 0.0) throw new Exception("Division by zero"); left /= r; }
                 else break;
             }
+
             return left;
         }
 
@@ -291,37 +369,37 @@ internal class EvalProgram
                 if (!Match(TokenType.RP)) throw new Exception("Expected )");
                 return v;
             }
+
             throw new Exception("Unexpected token: " + t);
         }
     }
 
     private static void Main()
     {
-        var rtmap = new Dictionary<int, double>();
+        var realDataBaseMap = new Dictionary<int, double>();
         Console.WriteLine("Enter expression (empty to quit):");
         while (true)
         {
-            string line = Console.ReadLine();
+            string? line = Console.ReadLine();
             if (string.IsNullOrWhiteSpace(line)) break;
             try
             {
-                var tokenizer = new Tokenizer(line);
-                var toks = tokenizer.Tokenize();
-                var parser = new Parser(toks, rtmap);
-                var stmt = parser.ParseStatement();
-                if (stmt.isAssignment)
+                var parser = new Parser((new Tokenizer(line)).Tokenize(), realDataBaseMap);
+                var statement = parser.ParseStatement();
+                if (statement.isAssignment)
                 {
-                    Console.WriteLine($"Assigned #{stmt.id} = {stmt.value.ToString(CultureInfo.InvariantCulture)}");
+                    Console.WriteLine($"Assigned #{statement.id} = {statement.value.ToString(CultureInfo.InvariantCulture)}");
                 }
                 else
                 {
-                    Console.WriteLine("Result: " + stmt.value.ToString(CultureInfo.InvariantCulture));
+                    Console.WriteLine("Result: " + statement.value.ToString(CultureInfo.InvariantCulture));
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Error: " + ex.Message);
             }
+
             Console.WriteLine("Enter expression (empty to quit):");
         }
     }
