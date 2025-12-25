@@ -172,6 +172,7 @@ typedef enum {
     T_LSHIFT,
     T_RSHIFT,
     T_ASSIGN,
+    T_COMMA,
     T_EOF, T_INVALID
 } TokenType;
 
@@ -357,7 +358,8 @@ typedef struct Node {
         struct {
             char* name;
             void* funcPtr;
-            struct Node* arg;
+            struct Node** args;
+            int argc;
         } func;
         struct {
             int id;
@@ -427,38 +429,40 @@ static double npr(double n, double r)
  * Built-in functions
  * must be in alphabetical order
  **************************************/
-static const buildInFunc_s s_buildInFunctions[] = {
-                                                    { "abs", fabs, },
-                                                    { "acos", acos, },
-                                                    { "asin", asin, },
-                                                    { "atan", atan, },
-                                                    { "atan2", atan2, },
-                                                    { "ceil", ceil, },
-                                                    { "cos", cos, },
-                                                    { "cosh", cosh, },
-                                                    { "e", e, },
-                                                    { "exp", exp, },
-                                                    { "fac", fac, },
-                                                    { "floor", floor, },
-                                                    { "ln", log, },
-                                                    { "log", log, },
-                                                    { "log10", log10, },
-                                                    { "ncr", ncr, },
-                                                    { "npr", npr, },
-                                                    { "pi", pi, },
-                                                    { "pow", pow, },
-                                                    { "sin", sin, },
-                                                    { "sinh", sinh, },
-                                                    { "sqrt", sqrt, },
-                                                    { "tan", tan, },
-                                                    { "tanh", tanh, },
-                                                    { 0, 0 } //sentinel, make sure that array has elements, do not remove
+typedef struct { const char* name; const void* funcPtr; int arity; } buildInFunc2_s;
+
+static const buildInFunc2_s s_buildInFunctions[] = {
+    { "abs", fabs, 1 },
+    { "acos", acos, 1 },
+    { "asin", asin, 1 },
+    { "atan", atan, 1 },
+    { "atan2", atan2, 2 },
+    { "ceil", ceil, 1 },
+    { "cos", cos, 1 },
+    { "cosh", cosh, 1 },
+    { "e", e, 0 },
+    { "exp", exp, 1 },
+    { "fac", fac, 1 },
+    { "floor", floor, 1 },
+    { "ln", log, 1 },
+    { "log", log, 1 },
+    { "log10", log10, 1 },
+    { "ncr", ncr, 2 },
+    { "npr", npr, 2 },
+    { "pi", pi, 0 },
+    { "pow", pow, 2 },
+    { "sin", sin, 1 },
+    { "sinh", sinh, 1 },
+    { "sqrt", sqrt, 1 },
+    { "tan", tan, 1 },
+    { "tanh", tanh, 1 },
+    { NULL, NULL, 0 }
 };
 
-static const buildInFunc_s* findBuilDIn(const char* name, int len)
+static const buildInFunc2_s* findBuilDIn(const char* name, int len)
 {
     int imin = 0;
-    int imax = sizeof(s_buildInFunctions) / sizeof(buildInFunc_s) - 2;
+    int imax = sizeof(s_buildInFunctions) / sizeof(buildInFunc2_s) - 2;
 
     // binary search
     while (imax >= imin)
@@ -544,13 +548,14 @@ static Node* node_binary(BinaryOp op, Node* l, Node* r, int pos)
     return n;
 }
 
-static Node* node_func(const char* name, Node* arg, int pos, void* funcPtr)
+static Node* node_func(const char* name, Node** args, int argc, int pos, void* funcPtr)
 {
     Node* n = malloc(sizeof(Node));
     n->type = N_FUNC;
     n->pos = pos;
     n->v.func.name = strdup(name);
-    n->v.func.arg = arg;
+    n->v.func.args = args;
+    n->v.func.argc = argc;
     n->v.func.funcPtr = funcPtr;
 
     return n;
@@ -588,7 +593,12 @@ static void free_node(Node* n)
         break;
     case N_FUNC:
         free(n->v.func.name);
-        free_node(n->v.func.arg);
+        if (n->v.func.args)
+        {
+            for (int i = 0; i < n->v.func.argc; ++i)
+                free_node(n->v.func.args[i]);
+            free(n->v.func.args);
+        }
         break;
     case N_ASSIGN:
         free_node(n->v.assign.rhs);
@@ -693,7 +703,10 @@ static void print_node(Node* n, const char* indent, int last)
         {
             char buf[256];
             snprintf(buf, sizeof(buf), "%s%s", indent, last ? "   " : "©¦  ");
-            print_node(n->v.func.arg, buf, 1);
+            for (int i = 0; i < n->v.func.argc; ++i)
+            {
+                print_node(n->v.func.args[i], buf, i == n->v.func.argc - 1);
+            }
         }
         break;
     case N_ASSIGN:
@@ -800,12 +813,42 @@ static double eval_node(Node* n, RtMap* rt)
     }
     case N_FUNC:
     {
-        double a = eval_node(n->v.func.arg, rt);
-        if (n->v.func.funcPtr)
-            return EVAL_FUNCTION(n->v.func.funcPtr, double)(a);
+        // evaluate args
+        double args_vals[4];
+        for (int i = 0; i < n->v.func.argc; ++i)
+        {
+            if (i < 4)
+                args_vals[i] = eval_node(n->v.func.args[i], rt);
+        }
 
-        fprintf(stderr, "Runtime error: unknown function %s at pos %d\n", n->v.func.name, n->pos);
-        exit(1);
+        // dispatch based on arity
+        if (!n->v.func.funcPtr)
+        {
+            fprintf(stderr, "Runtime error: unknown function %s at pos %d\n", n->v.func.name, n->pos);
+            exit(1);
+        }
+
+        // support up to 2-arg functions; constants like pi/e have argc==0
+        if (n->v.func.argc == 0)
+        {
+            double (*f0)(void) = (double (*)(void))n->v.func.funcPtr;
+            return f0();
+        }
+        else if (n->v.func.argc == 1)
+        {
+            double (*f1)(double) = (double (*)(double))n->v.func.funcPtr;
+            return f1(args_vals[0]);
+        }
+        else if (n->v.func.argc == 2)
+        {
+            double (*f2)(double, double) = (double (*)(double, double))n->v.func.funcPtr;
+            return f2(args_vals[0], args_vals[1]);
+        }
+        else
+        {
+            fprintf(stderr, "Runtime error: function %s with arity %d not supported at pos %d\n", n->v.func.name, n->v.func.argc, n->pos);
+            exit(1);
+        }
     }
     case N_ASSIGN:
     {
@@ -1100,7 +1143,7 @@ static Node* parse_power_node(TokenList* toks)
     //        return node_func(cur.text, arg, cur.pos);
     //    }
 
-    const buildInFunc_s* func = findBuilDIn(cur.text, (int)strlen(cur.text));
+    const buildInFunc2_s* func = findBuilDIn(cur.text, (int)strlen(cur.text));
     if (cur.type == T_IDENT && func != NULL)
     {
         tlist_next(toks);
@@ -1109,14 +1152,34 @@ static Node* parse_power_node(TokenList* toks)
             fprintf(stderr, "Syntax error: expected '(' after %s at %d\n", cur.text, cur.pos);
             exit(1);
         }
-        Node* arg = parse_assign(toks);
+        // parse argument list (comma separated)
+        Node** args = NULL;
+        int argc = 0;
         if (!match(toks, T_RP))
         {
-            fprintf(stderr, "Syntax error: expected ')' after %s at %d\n", cur.text, cur.pos);
+            while (1)
+            {
+                Node* a = parse_assign(toks);
+                args = realloc(args, sizeof(Node*) * (argc + 1));
+                args[argc++] = a;
+                if (match(toks, T_RP))
+                    break;
+                if (!match(toks, T_COMMA))
+                {
+                    fprintf(stderr, "Syntax error: expected ',' or ')' after %s at %d\n", cur.text, cur.pos);
+                    exit(1);
+                }
+            }
+        }
+        // validate arity
+        if (func->arity >= 0 && func->arity != argc)
+        {
+            fprintf(stderr, "Syntax error: function %s expects %d args, got %d at %d\n", cur.text, func->arity, argc, cur.pos);
             exit(1);
         }
 
-        return node_func(cur.text, arg, cur.pos, (void*)func->funcPtr);
+        Node* fn = node_func(cur.text, args, argc, cur.pos, (void*)func->funcPtr);
+        return fn;
     }
 
     return parse_primary_node(toks);
@@ -1456,7 +1519,15 @@ static int node_contains_hash(Node* n)
     case N_BINARY:
         return node_contains_hash(n->v.binary.left) || node_contains_hash(n->v.binary.right);
     case N_FUNC:
-        return node_contains_hash(n->v.func.arg);
+    {
+        if (!n->v.func.args) return 0;
+        for (int i = 0; i < n->v.func.argc; ++i)
+        {
+            if (node_contains_hash(n->v.func.args[i]))
+                return 1;
+        }
+        return 0;
+    }
     case N_ASSIGN:
         return node_contains_hash(n->v.assign.rhs); // assignment lhs is id, not a hash node
     default:
@@ -1589,24 +1660,63 @@ static Node* optimize_node(Node* n)
 
     case N_FUNC:
     {
-        n->v.func.arg = optimize_node(n->v.func.arg);
-        if (!node_contains_hash(n) && n->v.func.arg && n->v.func.arg->type == N_NUMBER)
+        /* optimize each argument */
+        for (int i = 0; i < n->v.func.argc; ++i)
         {
-            double a = node_get_number(n->v.func.arg);
-            double res;
-            if (n->v.func.funcPtr)
+            n->v.func.args[i] = optimize_node(n->v.func.args[i]);
+        }
+
+        /* if subtree contains no realtime hashes and all args are numbers, constant-fold */
+        if (!node_contains_hash(n))
+        {
+            int all_number = 1;
+            for (int i = 0; i < n->v.func.argc; ++i)
             {
-                res = EVAL_FUNCTION(n->v.func.funcPtr, double)(a);
-                return node_number(res, n->pos);
-            }
-            else
-            {
-                return n; // unknown func, don't fold
+                if (!n->v.func.args[i] || n->v.func.args[i]->type != N_NUMBER)
+                {
+                    all_number = 0;
+                    break;
+                }
             }
 
-            int pos = n->pos;
-            free_node(n);
-            return node_number(res, pos);
+            if (all_number)
+            {
+                double vals[4] = {0.0, 0.0, 0.0, 0.0};
+                for (int i = 0; i < n->v.func.argc && i < 4; ++i)
+                    vals[i] = node_get_number(n->v.func.args[i]);
+
+                if (n->v.func.funcPtr)
+                {
+                    double res = 0.0;
+                    if (n->v.func.argc == 0)
+                    {
+                        double (*f0)(void) = (double (*)(void))n->v.func.funcPtr;
+                        res = f0();
+                    }
+                    else if (n->v.func.argc == 1)
+                    {
+                        double (*f1)(double) = (double (*)(double))n->v.func.funcPtr;
+                        res = f1(vals[0]);
+                    }
+                    else if (n->v.func.argc == 2)
+                    {
+                        double (*f2)(double, double) = (double (*)(double, double))n->v.func.funcPtr;
+                        res = f2(vals[0], vals[1]);
+                    }
+                    else
+                    {
+                        return n; /* unsupported arity for folding */
+                    }
+
+                    int pos = n->pos;
+                    free_node(n);
+                    return node_number(res, pos);
+                }
+                else
+                {
+                    return n; /* unknown func */
+                }
+            }
         }
 
         return n;
