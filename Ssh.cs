@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Rendering;
 using Renci.SshNet;
 
 namespace ConsoleApp1
@@ -216,6 +217,26 @@ namespace ConsoleApp1
         {
             StopMonitor();
             try { _client.Dispose(); } catch { }
+        }
+
+        private static void Main(string[] args)
+        {
+            try
+            {
+                SshHelper helper = new("192.168.10.200", 8888, "root", "Zgdky@admin123");
+                helper.Connect();
+                while (helper.IsConnected)
+                {
+                    Console.WriteLine($"[{DateTime.Now}]Connected");
+                    Thread.Sleep(1000);
+                }
+
+                Console.ReadKey();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex}");
+            }
         }
     }
 }
