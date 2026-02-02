@@ -674,7 +674,7 @@ internal class EvaluateProgram
         }
     }
 
-    private static void Main()
+    private static void EvalMain()
     {
         var realDataBaseMap = new Dictionary<int, double>();
         Console.WriteLine("Enter expression (empty to quit):");
