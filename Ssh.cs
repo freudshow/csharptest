@@ -17,6 +17,7 @@ namespace ConsoleApp1
         private readonly TimeSpan _keepAliveCommandTimeout;
         private CancellationTokenSource? _cts;
         private Task? _monitorTask;
+        private int _disconnectedSignaled = 0;
 
         /// <summary>
         /// Raised when connection is detected lost (or explicit disconnect).
@@ -56,6 +57,8 @@ namespace ConsoleApp1
         /// </summary>
         public void Connect()
         {
+            // reset disconnected signal in case helper is reused
+            System.Threading.Interlocked.Exchange(ref _disconnectedSignaled, 0);
             _client.Connect();
             StartMonitor();
         }
@@ -206,9 +209,19 @@ namespace ConsoleApp1
 
         private void OnDisconnected(Exception? ex)
         {
+            // Ensure we only signal disconnection once
+            if (System.Threading.Interlocked.Exchange(ref _disconnectedSignaled, 1) == 1)
+                return;
+
             try
             {
-                Dispose();
+                // stop background monitor to avoid repeated attempts
+                StopMonitor();
+
+                // attempt to close underlying client gracefully if still connected
+                try { if (_client.IsConnected) _client.Disconnect(); } catch { }
+
+                // Raise event after we've attempted to quiesce
                 Disconnected?.Invoke(ex);
             }
             catch { }
@@ -220,34 +233,157 @@ namespace ConsoleApp1
             try { _client.Dispose(); } catch { }
         }
 
-        private static void Main(string[] args)
+        private static async Task<int> Main(string[] args)
         {
             try
             {
-                TimeSpan? keepAliveInterval = new TimeSpan(0, 0, 1);
-                TimeSpan? keepAliveCommandTimeout = new TimeSpan(0, 0, 5);
-                SshHelper helper = new("192.168.10.200", 8888, "root", "Zgdky@admin123",
-                                       keepAliveInterval, keepAliveCommandTimeout);
-                helper.Disconnected += (ex) =>
+                Console.Write("Host: ");
+                var host = Console.ReadLine()?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(host))
                 {
-                    Console.WriteLine($"[{DateTime.Now}]Disconnected: {ex}");
-                    helper.Disconnect();
-                };
-
-                helper.Connect();
-                while (helper.IsConnected)
-                {
-                    Console.WriteLine($"[{DateTime.Now}]Connected");
-                    Thread.Sleep(1000);
+                    Console.WriteLine("Host required");
+                    return 1;
                 }
 
-                Console.WriteLine($"[{DateTime.Now}]Press any key to exit"); Console.ReadLine();
-                Console.ReadKey();
+                Console.Write("Port (default 22): ");
+                var portStr = Console.ReadLine();
+                var port = 22;
+                if (!string.IsNullOrEmpty(portStr) && !int.TryParse(portStr, out port))
+                {
+                    Console.WriteLine("Invalid port");
+                    return 1;
+                }
+
+                Console.Write("Username: ");
+                var user = Console.ReadLine()?.Trim() ?? string.Empty;
+                if (string.IsNullOrEmpty(user))
+                {
+                    Console.WriteLine("Username required");
+                    return 1;
+                }
+
+                Console.Write("Auth method ([p]assword/[k]ey, default p): ");
+                var method = Console.ReadLine()?.Trim().ToLowerInvariant();
+                SshHelper? helper = null;
+
+                TimeSpan? keepAliveInterval = TimeSpan.FromSeconds(10);
+                TimeSpan? keepAliveCommandTimeout = TimeSpan.FromSeconds(5);
+
+                if (method == "k")
+                {
+                    Console.Write("Private key path: ");
+                    var keyPath = Console.ReadLine()?.Trim() ?? string.Empty;
+                    if (string.IsNullOrEmpty(keyPath))
+                    {
+                        Console.WriteLine("Key path required");
+                        return 1;
+                    }
+
+                    Console.Write("Key passphrase (enter for none): ");
+                    var pass = ReadPassword();
+                    PrivateKeyFile keyFile;
+                    try
+                    {
+                        if (string.IsNullOrEmpty(pass))
+                            keyFile = new PrivateKeyFile(keyPath);
+                        else
+                            keyFile = new PrivateKeyFile(keyPath, pass);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to load key: {ex.Message}");
+                        return 1;
+                    }
+
+                    helper = new SshHelper(host, port, user, keyFile, keepAliveInterval, keepAliveCommandTimeout);
+                }
+                else
+                {
+                    Console.Write("Password: ");
+                    var pwd = ReadPassword();
+                    helper = new SshHelper(host, port, user, pwd, keepAliveInterval, keepAliveCommandTimeout);
+                }
+
+                var disconnected = new TaskCompletionSource<Exception?>();
+                helper.Disconnected += (ex) =>
+                {
+                    Console.WriteLine($"[{DateTime.Now}] Disconnected: {ex?.Message ?? "closed"}");
+                    disconnected.TrySetResult(ex);
+                };
+
+                // connect
+                Console.WriteLine("Connecting...");
+                await helper.ConnectAsync();
+                Console.WriteLine("Connected.");
+
+                // interactive REPL loop
+                while (helper.IsConnected)
+                {
+                    Console.Write("> ");
+                    var line = Console.ReadLine();
+                    if (line == null) break;
+                    line = line.Trim();
+                    if (string.Equals(line, "exit", StringComparison.OrdinalIgnoreCase))
+                    {
+                        break;
+                    }
+                    if (line.Length == 0) continue;
+
+                    try
+                    {
+                        var output = await helper.RunCommandAsync(line, TimeSpan.FromSeconds(30));
+                        if (!string.IsNullOrEmpty(output))
+                            Console.WriteLine(output);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Command error: {ex.Message}");
+                        // if disconnected, break out
+                        if (!helper.IsConnected) break;
+                    }
+                }
+
+                // disconnect and cleanup
+                helper.Disconnect();
+                helper.Dispose();
+
+                // wait for disconnect
+                await disconnected.Task;
+
+                Console.WriteLine("Disconnected. Press any key to exit.");
+                Console.ReadLine();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error: {ex}");
+                Console.WriteLine($"Error: {ex.Message}");
+                return 1;
             }
+
+            return 0;
+        }
+
+        private static string ReadPassword()
+        {
+            var pwd = string.Empty;
+            ConsoleKeyInfo key;
+            while ((key = Console.ReadKey(true)).Key != ConsoleKey.Enter)
+            {
+                if (key.Key == ConsoleKey.Backspace)
+                {
+                    if (pwd.Length > 0)
+                    {
+                        pwd = pwd[0..^1];
+                        Console.Write("\b \b");
+                    }
+                }
+                else
+                {
+                    pwd += key.KeyChar;
+                    Console.Write('*');
+                }
+            }
+            Console.WriteLine();
+            return pwd;
         }
     }
 }
