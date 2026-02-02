@@ -208,6 +208,7 @@ namespace ConsoleApp1
         {
             try
             {
+                Dispose();
                 Disconnected?.Invoke(ex);
             }
             catch { }
@@ -223,7 +224,16 @@ namespace ConsoleApp1
         {
             try
             {
-                SshHelper helper = new("192.168.10.200", 8888, "root", "Zgdky@admin123");
+                TimeSpan? keepAliveInterval = new TimeSpan(0, 0, 1);
+                TimeSpan? keepAliveCommandTimeout = new TimeSpan(0, 0, 5);
+                SshHelper helper = new("192.168.10.200", 8888, "root", "Zgdky@admin123",
+                                       keepAliveInterval, keepAliveCommandTimeout);
+                helper.Disconnected += (ex) =>
+                {
+                    Console.WriteLine($"[{DateTime.Now}]Disconnected: {ex}");
+                    helper.Disconnect();
+                };
+
                 helper.Connect();
                 while (helper.IsConnected)
                 {
@@ -231,6 +241,7 @@ namespace ConsoleApp1
                     Thread.Sleep(1000);
                 }
 
+                Console.WriteLine($"[{DateTime.Now}]Press any key to exit"); Console.ReadLine();
                 Console.ReadKey();
             }
             catch (Exception ex)
