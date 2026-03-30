@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="AngouriMath" Version="1.4.0" />
     <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="CSharpMath" Version="0.5.1" />
     <PackageReference Include="CSharpMath.Avalonia" Version="0.5.1" />
     <PackageReference Include="DotNetCore.NPOI" Version="1.2.3" />

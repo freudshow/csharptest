@@ -65,7 +65,7 @@ namespace ConsoleApp1
 
             // 遍历路径，找到目标位置的父对象
             JToken current = root;
-            for (int i = 0; i < pathSegments.Count - 1; i++)
+            for (int i = 0; i < pathSegments.Count; i++)
             {
                 var segment = pathSegments[i];
                 current = NavigateToSegment(current, segment);
@@ -307,56 +307,61 @@ namespace ConsoleApp1
                 };
 
                 // 加载JSON配置文件
-                string jsonContent = @"{
-                                            ""MainDevType"": 6,
-                                            ""DevType"": 23,
-                                            ""SubDevEnum"": 23,
-                                            ""ParameterTable"": 42,
-                                            ""RtdbTable"": 41,
-                                            ""UseJson"": false,
-                                            ""GprsCardMode"": 1,
-                                            ""UpCommPort"": 111,
-                                            ""UpLedMode"": 0,
-                                            ""DownCommPort"": 2,
-                                            ""DownLedMode"": 0,
-                                            ""CanWriteFiles"": 0,
-                                            ""GprsCardMode_APN2"": 1,
-                                            ""Gprs_APN2_Enable"": 1,
-                                            ""Gprs_APN1_Enable"": 1,
-                                            ""Network"": 100,
-                                            ""Channels"": [
+                string jsonContent = """
+{
+                                            "MainDevType": 6,
+                                            "DevType": 23,
+                                            "SubDevEnum": 23,
+                                            "ParameterTable": 42,
+                                            "RtdbTable": 41,
+                                            "UseJson": false,
+                                            "GprsCardMode": 1,
+                                            "UpCommPort": 111,
+                                            "UpLedMode": 0,
+                                            "DownCommPort": 2,
+                                            "DownLedMode": 0,
+                                            "CanWriteFiles": 0,
+                                            "GprsCardMode_APN2": 1,
+                                            "Gprs_APN2_Enable": 1,
+                                            "Gprs_APN1_Enable": 1,
+                                            "Network":
+                                            {
+                                                "Timeout":100,
+                                            },
+                                            "Channels": [
                                                 {
-                                                    ""BaudRate"": 2400
+                                                    "BaudRate": 2400
                                                 },
                                                 {
-                                                    ""BaudRate"": 9600
+                                                    "BaudRate": 9600
                                                 }
                                             ],
-                                            ""atr0"": {
-                                                ""attr1"": {
-                                                    ""att2"": [
+                                            "atr0": {
+                                                "attr1": {
+                                                    "att2": [
                                                         {
-                                                            ""attr4"": ""first value""
+                                                            "attr4": "first value"
                                                         },
                                                         {
-                                                            ""attr4"": ""second value""
+                                                            "attr4": "second value"
                                                         },
                                                         {
-                                                            ""attr4"": ""third value""
+                                                            "attr4": "third value"
                                                         },
                                                         {
-                                                            ""attr4"": ""fourth value""
+                                                            "attr4": "fourth value"
                                                         },
                                                         {
-                                                            ""attr4"": ""fifth value""
+                                                            "attr4": "fifth value"
                                                         },
                                                         {
-                                                            ""attr4"": ""senventh value""
+                                                            "attr4": "senventh value"
                                                         }
                                                     ]
                                                 }
                                             }
-                                        }";
+                                        }
+""";
                 JObject root = JObject.Parse(jsonContent);
 
                 // 应用修改
