@@ -431,7 +431,7 @@ namespace ConsoleApp1
             File.WriteAllText(configFilePath, root.ToString(Formatting.Indented));
         }
 
-        private static void Main(string[] args)
+        private static void JsonPathMain(string[] args)
         {
             try
             {
