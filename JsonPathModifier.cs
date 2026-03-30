@@ -53,24 +53,30 @@ namespace ConsoleApp1
         /// <param name="attributeName">属性路径，如 "UseJson" 或 "atr0.attr1.att2[3].attr4"</param>
         /// <param name="attributeValue">要设置的目标值</param>
         /// <returns>是否修改成功</returns>
-        public static bool SetValueByPath(JObject root, string attributeName, object attributeValue)
+        public static bool SetValueByPath(JObject? root, string attributeName, object attributeValue)
         {
             if (root == null || string.IsNullOrWhiteSpace(attributeName))
+            {
                 return false;
+            }
 
             // 解析路径
             var pathSegments = ParsePath(attributeName);
             if (pathSegments.Count == 0)
+            {
                 return false;
+            }
 
             // 遍历路径，找到目标位置的父对象
-            JToken current = root;
-            for (int i = 0; i < pathSegments.Count; i++)
+            JToken? current = root;
+            for (int i = 0; i < pathSegments.Count - 1; i++)
             {
                 var segment = pathSegments[i];
                 current = NavigateToSegment(current, segment);
                 if (current == null)
+                {
                     return false;
+                }
             }
 
             // 设置最终值
@@ -85,11 +91,17 @@ namespace ConsoleApp1
         {
             var segments = new List<PathSegment>();
             // 匹配: 属性名 或 属性名[索引]
+            // 正则说明: ([^\.\[\]]+) 匹配属性名, (?:\[(\d+)\])? 匹配可选的数组索引
+            // 例如: "Channels[0].BaudRate" -> "Channels" + "0", "BaudRate" + null
             var pattern = @"([^\.\[\]]+)(?:\[(\d+)\])?";
-            var matches = Regex.Matches(path, pattern);
 
-            foreach (Match match in matches)
+            foreach (Match match in Regex.Matches(path, pattern))
             {
+                if (string.IsNullOrEmpty(match.Groups[1].Value))
+                {
+                    continue;
+                }
+
                 string propertyName = match.Groups[1].Value;
                 int? arrayIndex = null;
 
@@ -111,15 +123,26 @@ namespace ConsoleApp1
         /// <summary>
         /// 导航到指定的路径段
         /// </summary>
-        private static JToken NavigateToSegment(JToken current, PathSegment segment)
+        private static JToken? NavigateToSegment(JToken? current, PathSegment? segment)
         {
-            // 获取属性
-            JToken next = null;
+            if (current == null)
+            {
+                return null;
+            }
 
+            if (segment == null || string.IsNullOrEmpty(segment.PropertyName))
+            {
+                return null;
+            }
+
+            // 获取属性
+            JToken? next;
             if (current is JObject obj)
             {
                 if (!obj.TryGetValue(segment.PropertyName, out next))
+                {
                     return null;
+                }
             }
             else if (current is JArray arr)
             {
@@ -138,7 +161,10 @@ namespace ConsoleApp1
                 {
                     return array[segment.ArrayIndex.Value];
                 }
-                return null;
+                else
+                {
+                    return null;
+                }
             }
 
             return next;
@@ -147,65 +173,33 @@ namespace ConsoleApp1
         /// <summary>
         /// 在指定路径段设置值
         /// </summary>
-        private static bool SetValueAtSegment(JToken current, PathSegment segment, object value)
+        private static bool SetValueAtSegment(JToken? current, PathSegment? segment, object value)
         {
-            JToken target = null;
+            if (current == null || segment == null || string.IsNullOrEmpty(segment.PropertyName))
+            {
+                return false;
+            }
 
             if (current is JObject obj)
             {
-                if (!obj.TryGetValue(segment.PropertyName, out target))
+                if (!obj.ContainsKey(segment.PropertyName))
+                {
                     return false;
+                }
+
+                obj[segment.PropertyName] = ConvertToJToken(value);
+
+                return true;
             }
             else if (current is JArray arr && segment.ArrayIndex.HasValue)
             {
-                if (segment.ArrayIndex.Value < arr.Count)
-                {
-                    target = arr[segment.ArrayIndex.Value];
-                }
-                else
+                if (segment.ArrayIndex.Value >= arr.Count)
                 {
                     return false;
                 }
-            }
-            else
-            {
-                return false;
-            }
 
-            // 如果有数组索引，获取数组元素
-            if (segment.ArrayIndex.HasValue && target is JArray array)
-            {
-                if (segment.ArrayIndex.Value >= array.Count)
-                    return false;
-                target = array[segment.ArrayIndex.Value];
-            }
-
-            if (target == null)
-                return false;
-
-            // 转换值为JToken并设置
-            JToken newValue = ConvertToJToken(value);
-
-            // 根据目标类型替换值
-            if (target.Parent is JObject parentObj)
-            {
-                // 找到目标在父对象中的属性名
-                var property = target.Parent.Children<JProperty>()
-                    .FirstOrDefault(p => p.Value == target);
-                if (property != null)
-                {
-                    property.Value = newValue;
-                    return true;
-                }
-            }
-            else if (target.Parent is JArray parentArr)
-            {
-                int index = parentArr.IndexOf(target);
-                if (index >= 0)
-                {
-                    parentArr[index] = newValue;
-                    return true;
-                }
+                arr[segment.ArrayIndex.Value] = ConvertToJToken(value);
+                return true;
             }
 
             return false;
@@ -217,29 +211,56 @@ namespace ConsoleApp1
         private static JToken ConvertToJToken(object value)
         {
             if (value == null)
+            {
                 return JValue.CreateNull();
+            }
 
             // 已经是JToken
             if (value is JToken token)
+            {
                 return token;
+            }
 
             // 基本类型
             if (value is string str)
+            {
                 return new JValue(str);
+            }
+
             if (value is int intVal)
+            {
                 return new JValue(intVal);
+            }
+
             if (value is long longVal)
+            {
                 return new JValue(longVal);
+            }
+
             if (value is bool boolVal)
+            {
                 return new JValue(boolVal);
+            }
+
             if (value is double doubleVal)
+            {
                 return new JValue(doubleVal);
+            }
+
             if (value is float floatVal)
+            {
                 return new JValue(floatVal);
+            }
+
             if (value is decimal decimalVal)
+            {
                 return new JValue(decimalVal);
+            }
+
             if (value is DateTime dateVal)
+            {
                 return new JValue(dateVal);
+            }
 
             // 其他类型尝试序列化
             return JToken.FromObject(value);
@@ -253,19 +274,12 @@ namespace ConsoleApp1
             /// <summary>
             /// 属性名
             /// </summary>
-            public string PropertyName { get; set; }
+            public string? PropertyName { get; set; }
 
             /// <summary>
             /// 数组索引（如果有）
             /// </summary>
             public int? ArrayIndex { get; set; }
-
-            public override string ToString()
-            {
-                return ArrayIndex.HasValue
-                    ? $"{PropertyName}[{ArrayIndex.Value}]"
-                    : PropertyName;
-            }
         }
     }
 
@@ -289,21 +303,21 @@ namespace ConsoleApp1
                 var item2 = new DevTypeC0WRItemClass
                 {
                     AttributeName = "Network.Timeout",
-                    AttributeValue = 30
+                    AttributeValue = 130
                 };
 
                 // 示例3: 数组元素属性修改
                 var item3 = new DevTypeC0WRItemClass
                 {
                     AttributeName = "Channels[0].BaudRate",
-                    AttributeValue = 9600
+                    AttributeValue = 115200
                 };
 
                 // 示例4: 深层嵌套+数组
                 var item4 = new DevTypeC0WRItemClass
                 {
                     AttributeName = "atr0.attr1.att2[3].attr4",
-                    AttributeValue = "new value"
+                    AttributeValue = "third value is modified"
                 };
 
                 // 加载JSON配置文件
@@ -355,7 +369,7 @@ namespace ConsoleApp1
                                                             "attr4": "fifth value"
                                                         },
                                                         {
-                                                            "attr4": "senventh value"
+                                                            "attr4": "sixth value"
                                                         }
                                                     ]
                                                 }
@@ -369,6 +383,16 @@ namespace ConsoleApp1
                 bool success2 = JsonPathModifier.SetValueByPath(root, item2.AttributeName, item2.AttributeValue);
                 bool success3 = JsonPathModifier.SetValueByPath(root, item3.AttributeName, item3.AttributeValue);
                 bool success4 = JsonPathModifier.SetValueByPath(root, item4.AttributeName, item4.AttributeValue);
+
+                if (!success1 || !success2 || !success3 || !success4)
+                {
+                    Console.WriteLine("修改失败");
+                    return;
+                }
+
+                // 打印修改后的配置
+                Console.WriteLine("修改后的配置:");
+                Console.WriteLine(root.ToString(Formatting.Indented));
 
                 // 保存修改后的配置
                 File.WriteAllText("devtype_modified.json", root.ToString(Formatting.Indented));
