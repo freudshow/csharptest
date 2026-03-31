@@ -37,7 +37,7 @@ namespace ConsoleApp1
 
     public class TestSFTP
     {
-        public static void Main(string[] args)
+        public static void TestSFTPMain(string[] args)
         {
             string str = """
                                 {
