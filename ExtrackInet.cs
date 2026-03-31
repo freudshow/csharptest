@@ -14,11 +14,32 @@ namespace ConsoleApp1
         /// </summary>
         public static string ExtractIPForAdapter(string text, string adapterName)
         {
-            // 正则：匹配 网卡名 + 任意内容 + inet addr:IP
-            string pattern = $@"{adapterName}.*?inet addr:(\d+\.\d+\.\d+\.\d+)";
-            Match match = Regex.Match(text, pattern, RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            // 正则：匹配 网卡名行 + 后续行（直到下一个网卡或文本结束）中的 inet addr:IP
+            // 使用 (?s) 启用单行模式，. 匹配换行符
+            // 使用 (?!^[A-Za-z]) 负向前瞻，确保不匹配到下一个网卡名
+            string pattern = $@"(?s)^(?:{adapterName}\b.*?)(?=^(?:[A-Za-z]|\z))";
+            Match adapterMatch = Regex.Match(text, pattern, RegexOptions.Multiline);
 
-            return match.Success ? match.Groups[1].Value : null;
+            if (!adapterMatch.Success)
+                return null;
+
+            // 在匹配到的网卡块中查找 inet addr
+            string adapterBlock = adapterMatch.Value;
+            string ipPattern = @"inet addr:(\d+\.\d+\.\d+\.\d+)";
+            Match ipMatch = Regex.Match(adapterBlock, ipPattern);
+
+            return ipMatch.Success ? ipMatch.Groups[1].Value : null;
+        }
+
+        /// <summary>
+        /// 获取指定网卡的完整配置信息
+        /// </summary>
+        public static string GetAdapterInfo(string text, string adapterName)
+        {
+            string pattern = $@"(?s)^(?:{adapterName}\b.*?)(?=^(?:[A-Za-z]|\z))";
+            Match adapterMatch = Regex.Match(text, pattern, RegexOptions.Multiline);
+
+            return adapterMatch.Success ? adapterMatch.Value.Trim() : null;
         }
 
         public static void Main(string[] args)
@@ -85,6 +106,28 @@ usbnet0   Link encap:Ethernet  HWaddr AE:D2:21:E3:9B:B6
             Console.WriteLine("ccinet1 IP: " + ip2);
             Console.WriteLine("eth0 IP: " + eth0);
             Console.WriteLine("lo IP: " + lo);
+
+            Console.WriteLine();
+            Console.WriteLine("=== eth0 信息 ===");
+            var eth0Info = GetAdapterInfo(ifconfigOutput, "eth0");
+            Console.WriteLine(eth0Info ?? "未找到");
+
+            Console.WriteLine();
+            Console.WriteLine("=== lo 信息 ===");
+            var loInfo = GetAdapterInfo(ifconfigOutput, "lo");
+            Console.WriteLine(loInfo ?? "未找到");
+
+            Console.WriteLine();
+            Console.WriteLine("=== ccinet0 信息 ===");
+            Console.WriteLine(GetAdapterInfo(ifconfigOutput, "ccinet0") ?? "未找到");
+
+            Console.WriteLine();
+            Console.WriteLine("=== ccinet1 信息 ===");
+            Console.WriteLine(GetAdapterInfo(ifconfigOutput, "ccinet1") ?? "未找到");
+
+            Console.WriteLine();
+            Console.WriteLine("=== br-lan 信息 ===");
+            Console.WriteLine(GetAdapterInfo(ifconfigOutput, "br-lan") ?? "未找到");
 
             Console.ReadLine();
         }
