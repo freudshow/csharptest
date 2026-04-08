@@ -25,74 +25,29 @@ namespace ConsoleApp1
             }
         }
 
-        public static async Task<string> ExecCmdAsync(string ip, string user, string pass, string cmd, int timeoutSeconds)
+        public static async Task<string> ExecCmdAsync(string ip, int port, string user, string pass, string cmd, int timeoutSeconds)
         {
             try
             {
-                using (var client = new SshClient(ip, user, pass))
+                PasswordConnectionInfo info = new PasswordConnectionInfo(ip, port, user, pass);
+                info.Timeout = new TimeSpan(0, 0, timeoutSeconds);
+
+                using (SshClient client = new SshClient(info))
                 {
-                    client.Connect();
-
-                    var terminalModes = new Dictionary<TerminalModes, uint>
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds)))
                     {
-                        { TerminalModes.ECHO, 0 }
-                    };
-
-                    var stream = client.CreateShellStream("dumb", 80, 24, 0, 0, 1024, terminalModes);
-
-                    var writer = new StreamWriter(stream) { AutoFlush = true };
-                    var reader = new StreamReader(stream);
-
-                    var startMarker = "__CMD_START_9f3b6a__";
-                    var endMarker = "__CMD_END_9f3b6a__";
-
-                    writer.WriteLine($"echo '{startMarker}'");
-                    writer.WriteLine(cmd);
-                    writer.WriteLine($"echo '{endMarker}'");
-                    writer.WriteLine("exit");
-
-                    while (!stream.DataAvailable)
-                    {
-                        await Task.Delay(50);
+                        await client.ConnectAsync(cts.Token);
                     }
 
-                    string result = await reader.ReadToEndAsync();
-
-                    var startIdx = result.IndexOf(startMarker);
-                    if (startIdx >= 0)
+                    using (SshCommand x = client.RunCommand(cmd))
                     {
-                        var afterStart = result.IndexOf('\n', startIdx);
-                        var contentStart = afterStart >= 0 ? afterStart + 1 : startIdx + startMarker.Length;
-                        var endIdx = result.IndexOf(endMarker, contentStart);
-                        if (endIdx >= 0 && endIdx > contentStart)
-                        {
-                            var output = result.Substring(contentStart, endIdx - contentStart);
-
-                            output = Regex.Replace(output, "\u001B\\[[0-?]*[ -/]*[@-~]", "");
-                            output = Regex.Replace(output, @"\[\d+\]\s*\d+", "");
-                            output = Regex.Replace(output, @"(?:\[[^\]]+\]|[^@\s:\[\]]+@[^\s:]+:[^\s]+)[#\$]\s*", "", RegexOptions.Multiline);
-
-                            var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.None)
-                                              .Select(l => l.Trim())
-                                              .Where(l => !string.IsNullOrEmpty(l))
-                                              .Where(l => !string.Equals(l, cmd.Trim(), System.StringComparison.Ordinal))
-                                              .ToArray();
-
-                            var cleaned = string.Join("\n", lines).Trim();
-                            stream.Close();
-                            client.Disconnect();
-                            return cleaned;
-                        }
+                        return x.Result;
                     }
-
-                    stream.Close();
-                    client.Disconnect();
-                    return string.Empty;
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                throw;
+                throw new Exception(ex.Message);
             }
         }
 
@@ -182,11 +137,11 @@ namespace ConsoleApp1
 
             //string cmd = "ls -al /etc/4g";
 
-            try
+            while (true)
             {
-                while (true)
+                try
                 {
-                    Console.Write($">");
+                    Console.Write($"[{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff")}]>");
                     string? cmd = Console.ReadLine();
                     if (string.IsNullOrEmpty(cmd))
                     {
@@ -198,14 +153,13 @@ namespace ConsoleApp1
                         break;
                     }
 
-                    string result = await ExecCmdWithResultAsync(ip, port, user, pass, cmd, 2);
+                    string result = await ExecCmdAsync(ip, port, user, pass, cmd, 2);
                     Console.Write($"{result}\n");
                 }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"执行命令时发生错误: {ex.Message}");
-                Console.ReadLine();
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"执行命令时发生错误: {ex.Message}");
+                }
             }
         }
     }
