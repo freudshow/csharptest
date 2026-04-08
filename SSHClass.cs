@@ -119,7 +119,7 @@ namespace ConsoleApp1
                     };
 
                     var stream = client.CreateShellStream(
-                        "dumb",
+                        "xterm",
                         80,
                         24,
                         0,
@@ -132,7 +132,7 @@ namespace ConsoleApp1
                     var reader = new StreamReader(stream);
                     // 执行命令：先打印起始标记，执行命令，再打印结束标记，最后退出。
                     // 通过标记提取命令的标准输出，避免包含命令回显和 exit 相关输出。
-
+                    writer.WriteLine(cmd);
                     // 退出shell
                     writer.WriteLine("exit");
 
@@ -143,7 +143,27 @@ namespace ConsoleApp1
                     }
 
                     // 读取结果（可能包含提示、命令回显等）
-                    return await reader.ReadToEndAsync();
+                    string result = await reader.ReadToEndAsync();
+
+                    // 清理 ANSI 转义序列
+                    result = Regex.Replace(result, "\u001B\\[[0-?]*[ -/]*[@-~]", "");
+                    // 清理作业控制信息如 [1] 1234
+                    result = Regex.Replace(result, @"\[\d+\]\s*\d+", "");
+                    // 清理命令提示符 (user@host:~# 或 [user@host ~]# 等格式)
+                    result = Regex.Replace(result, @"(?:\[[^\]]+\]|[^@\s:\[\]]+@[^\s:]+:[^\s]+)[#\$]\s*", "",
+                                           RegexOptions.Multiline);
+
+                    // 按行分割，过滤空行、命令本身、logout、exit 和 shell 错误信息
+                    var lines = result.Split(new[] { '\r', '\n' }, StringSplitOptions.None)
+                                    .Select(l => l.Trim())
+                                    .Where(l => !string.IsNullOrEmpty(l))
+                                    .Where(l => !string.Equals(l, cmd.Trim(), System.StringComparison.Ordinal))
+                                    .Where(l => !l.Equals("logout", StringComparison.OrdinalIgnoreCase))
+                                    .Where(l => !l.Equals("exit", StringComparison.OrdinalIgnoreCase))
+                                    .Where(l => !l.StartsWith("-sh:", StringComparison.Ordinal))
+                                    .ToArray();
+
+                    return string.Join("\n", lines).Trim();
                 }
             }
             catch (Exception)
@@ -158,15 +178,29 @@ namespace ConsoleApp1
             int port = 22;
             string user = "root";
             string pass = "123456";
-            string cmd = "/home/sysadm/src/e9361app >/dev/null 2>&1 &";
+            // string cmd = "/home/sysadm/src/e9361app >/dev/null 2>&1 &";
 
             //string cmd = "ls -al /etc/4g";
 
             try
             {
-                string result = await ExecCmdWithResultAsync(ip, port, user, pass, cmd, 2);
-                Console.WriteLine($"命令执行结果: [{result}]");
-                Console.ReadLine();
+                while (true)
+                {
+                    Console.Write($">");
+                    string? cmd = Console.ReadLine();
+                    if (string.IsNullOrEmpty(cmd))
+                    {
+                        continue;
+                    }
+
+                    if (cmd == "exit")
+                    {
+                        break;
+                    }
+
+                    string result = await ExecCmdWithResultAsync(ip, port, user, pass, cmd, 2);
+                    Console.Write($"{result}\n");
+                }
             }
             catch (Exception ex)
             {
