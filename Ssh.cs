@@ -233,7 +233,7 @@ namespace ConsoleApp1
             try { _client.Dispose(); } catch { }
         }
 
-        private static async Task<int> Main(string[] args)
+        private static async Task<int> SshMain(string[] args)
         {
             try
             {

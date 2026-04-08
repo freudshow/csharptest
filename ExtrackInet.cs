@@ -16,8 +16,8 @@ namespace ConsoleApp1
         {
             // 正则：匹配 网卡名行 + 后续行（直到下一个网卡或文本结束）中的 inet addr:IP
             // 使用 (?s) 启用单行模式，. 匹配换行符
-            // 使用 (?!^[A-Za-z]) 负向前瞻，确保不匹配到下一个网卡名
-            string pattern = $@"(?s)^(?:{adapterName}\b.*?)(?=^(?:[A-Za-z]|\z))";
+            // adapterName 前匹配 0 或多个字符、数字或空白字符
+            string pattern = $@"(?s)[\s\S]*?{adapterName}\b.*?(?=(?:^|\n)[A-Za-z]|\z)";
             Match adapterMatch = Regex.Match(text, pattern, RegexOptions.Multiline);
 
             if (!adapterMatch.Success)
@@ -36,13 +36,13 @@ namespace ConsoleApp1
         /// </summary>
         public static string GetAdapterInfo(string text, string adapterName)
         {
-            string pattern = $@"(?s)^(?:{adapterName}\b.*?)(?=^(?:[A-Za-z]|\z))";
+            string pattern = $@"(?s)[\s\S]*?{adapterName}\b.*?(?=(?:^|\n)[A-Za-z]|\z)";
             Match adapterMatch = Regex.Match(text, pattern, RegexOptions.Multiline);
 
             return adapterMatch.Success ? adapterMatch.Value.Trim() : null;
         }
 
-        public static void Main(string[] args)
+        public static void ExtractMain(string[] args)
         {
             string ifconfigOutput = @"
 br-lan    Link encap:Ethernet  HWaddr 00:C8:A4:EC:35:E9
@@ -129,6 +129,32 @@ usbnet0   Link encap:Ethernet  HWaddr AE:D2:21:E3:9B:B6
             Console.WriteLine("=== br-lan 信息 ===");
             Console.WriteLine(GetAdapterInfo(ifconfigOutput, "br-lan") ?? "未找到");
 
+            string result = @"
+
+BusyBox v1.36.1 (2025-08-27 07:29:03 UTC) built-in shell (ash)
+
+  _______                     ________        __
+ |       |.-----.-----.-----.|  |  |  |.----.|  |_
+ |   -   ||  _  |  -__|     ||  |  |  ||   _||   _|
+ |_______||   __|_____|__|__||________||__|  |____|
+          |__| W I R E L E S S   F R E E D O M
+ -----------------------------------------------------
+ OpenWrt 24.10-SNAPSHOT, r0-996dd43
+ -----------------------------------------------------
+OW24.10_asr1803a7600_rls1536_1.057.081_20250827_07_58_bld29_SDK_FOR1828
+-----------------------------------------------------
+root@OpenWrt:~# ccinet0   Link encap:UNSPEC  HWaddr 00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+          inet addr:40.116.1.110  Mask:255.255.255.0
+          UP RUNNING NOARP  MTU:1500  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+root@OpenWrt:~# ";
+
+            var ip3 = ExtractIPForAdapter(result, "ccinet0");
+            Console.WriteLine("从 result 中提取 ccinet0 IP: " + ip3);
             Console.ReadLine();
         }
     }

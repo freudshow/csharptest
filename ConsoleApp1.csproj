@@ -16,6 +16,10 @@
     <PackageReference Include="DotNetCore.NPOI" Version="1.2.3" />
     <PackageReference Include="DotNetGraph" Version="3.3.0" />
     <PackageReference Include="EPPlus" Version="8.5.0" />
+    <PackageReference Include="GitInfo" Version="3.6.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Google.Protobuf" Version="3.34.1" />
     <PackageReference Include="GraphvizAvalonia" Version="0.1.0" />
     <PackageReference Include="LiveMarkdown.Avalonia.Math" Version="1.9.1" />
@@ -33,6 +37,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="NPOI" Version="2.7.6" />
     <PackageReference Include="Open-XML-SDK" Version="2.9.1" />
+    <PackageReference Include="Renci.SshNet.Async" Version="1.4.0" />
     <PackageReference Include="Spire.Office" Version="11.3.0" />
     <PackageReference Include="SSH.NET" Version="2025.1.0" />
     <PackageReference Include="System.Formats.Asn1" Version="10.0.5" />
@@ -51,4 +56,23 @@
     </None>
   </ItemGroup>
 
+    <Target Name="SetGitCommitHash" BeforeTargets="CoreCompile">
+        <!-- 确保在项目根目录执行git，并且忽略错误（无git时不炸编译） -->
+        <Exec Command="cd &quot;$(ProjectDir)&quot; &amp; git rev-parse --short HEAD 2&gt; nul || echo unknown" ConsoleToMsBuild="true" IgnoreExitCode="true">
+            <Output TaskParameter="ConsoleOutput" PropertyName="GitCommitHash" />
+        </Exec>
+
+        <!-- 嵌入程序集元数据 -->
+        <ItemGroup>
+            <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+                <_Parameter1>GitCommit</_Parameter1>
+                <_Parameter2>$(GitCommitHash.Trim())</_Parameter2>
+            </AssemblyAttribute>
+        </ItemGroup>
+
+        <!-- 生成编译常量（代码里可用 #if GIT_COMMIT） -->
+        <PropertyGroup>
+            <DefineConstants>$(DefineConstants);GIT_COMMIT="$(GitCommitHash.Trim())"</DefineConstants>
+        </PropertyGroup>
+    </Target>
 </Project>
