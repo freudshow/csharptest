@@ -127,12 +127,12 @@ namespace ConsoleApp1
             }
         }
 
-        public static async Task Main(string[] args)
+        public static async Task SSHMainAsync(string[] args)
         {
-            string ip = "192.168.0.232";
+            string ip = "192.168.195.183";
             int port = 22;
-            string user = "root";
-            string pass = "123456";
+            string user = "floyd";
+            string pass = "a";
             // string cmd = "/home/sysadm/src/e9361app >/dev/null 2>&1 &";
 
             //string cmd = "ls -al /etc/4g";
