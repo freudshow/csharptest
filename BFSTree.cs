@@ -48,9 +48,9 @@ namespace TreeAndQueueConsole
 
     internal class Program
     {
-        private static readonly Random _random = new Random();
+        public static readonly Random _random = new Random();
 
-        private static void TreeMain(string[] args)
+        public static void Main(string[] args)
         {
             int step = 1;
             Console.WriteLine("===== 树形结构 + 队列 + 全节点遍历演示程序 =====");
@@ -83,6 +83,10 @@ namespace TreeAndQueueConsole
             Console.WriteLine($"✅ 两次遍历节点数是否一致：{dfsAllNodes.Count == bfsAllNodes.Count}");
             Console.WriteLine("----------------------------------------\n");
 
+            // -------------------------- 获取树的深度 ----------------------
+
+            Console.WriteLine($"树的深度为: {GetTreeHeightIterative(root)}");
+            Console.WriteLine("----------------------------------------\n");
             Console.WriteLine("===== 演示结束 =====");
             Console.ReadKey();
         }
@@ -92,7 +96,7 @@ namespace TreeAndQueueConsole
         /// <summary>
         /// 迭代打印树形结构（避免递归栈溢出）
         /// </summary>
-        private static void PrintTreeIterative(TreeNode root)
+        public static void PrintTreeIterative(TreeNode root)
         {
             if (root == null) return;
 
@@ -117,7 +121,7 @@ namespace TreeAndQueueConsole
         /// <summary>
         /// 深度优先遍历（DFS）整个树，返回所有节点（迭代实现）
         /// </summary>
-        private static List<TreeNode> TraverseTreeDFS(TreeNode root)
+        public static List<TreeNode> TraverseTreeDFS(TreeNode root)
         {
             List<TreeNode> allNodes = new List<TreeNode>();
             if (root == null) return allNodes;
@@ -145,7 +149,7 @@ namespace TreeAndQueueConsole
         /// <summary>
         /// 广度优先遍历（BFS）整个树，返回所有节点（迭代实现）
         /// </summary>
-        private static List<TreeNode> TraverseTreeBFS(TreeNode root)
+        public static List<TreeNode> TraverseTreeBFS(TreeNode root)
         {
             List<TreeNode> allNodes = new List<TreeNode>();
             if (root == null) return allNodes;
@@ -173,11 +177,45 @@ namespace TreeAndQueueConsole
         /// <summary>
         /// 打印遍历结果（简化输出）
         /// </summary>
-        private static void PrintTraversalResult(string traversalType, List<TreeNode> nodes)
+        public static void PrintTraversalResult(string traversalType, List<TreeNode> nodes)
         {
             Console.WriteLine($"\n📊 {traversalType}遍历结果（所有节点值）：");
             string nodeValues = string.Join(", ", nodes.Select(n => n.Value));
             Console.WriteLine($"总节点数：{nodes.Count} | 节点值列表：{nodeValues}");
+        }
+
+        public static int GetTreeHeightIterative(TreeNode root)
+        {
+            if (root == null)
+                return 0;
+
+            Queue<TreeNode> queue = new Queue<TreeNode>();
+            queue.Enqueue(root);
+            int height = 0;
+
+            while (queue.Count > 0)
+            {
+                int levelSize = queue.Count;
+                height++;
+
+                for (int i = 0; i < levelSize; i++)
+                {
+                    TreeNode current = queue.Dequeue();
+
+                    // -----------------------
+                    // 只入队非 null 的子节点
+                    // -----------------------
+                    foreach (var child in current.Children)
+                    {
+                        if (child != null) // 这里加 null 检查
+                        {
+                            queue.Enqueue(child);
+                        }
+                    }
+                }
+            }
+
+            return height;
         }
 
         #endregion 核心工具方法

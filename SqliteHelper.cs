@@ -213,7 +213,7 @@ public class SQLite3Helper
         return ExecuteNonQuery(sql, parameters);
     }
 
-    public static void Main(string[] args)
+    public static void SqliteMain(string[] args)
     {
         // 1. 定义数据库路径
         string dbFilePath = "data_test.sqlite";
@@ -293,10 +293,13 @@ public class SQLite3Helper
 
         // 验证删除
         var deletedUserCheck = helper.GetUserById(2);
-        Console.WriteLine("删除后检查用户ID=2: " + (deletedUserCheck == null ? "未找到 (成功)" : "仍然存在 (失败)"));
+        if (deletedUserCheck != null)
+        {
+            Console.WriteLine("删除后检查用户ID=2: " + (deletedUserCheck == null ? "未找到 (成功)" : "仍然存在 (失败)"));
 
-        Console.WriteLine("\n==========================================");
-        Console.WriteLine("数据库操作流程全部完成。");
+            Console.WriteLine("\n==========================================");
+            Console.WriteLine("数据库操作流程全部完成。");
+        }
 
         Console.ReadLine();
     }
