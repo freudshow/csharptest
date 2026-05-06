@@ -58,7 +58,7 @@ namespace ConsoleApp1
 
     public class Program
     {
-        public static async Task Main(string[] args)
+        public static async Task OllamaMain(string[] args)
         {
             string userPrompt = "Write a short, encouraging poem about learning a new programming language.";
 

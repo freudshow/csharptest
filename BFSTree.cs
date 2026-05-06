@@ -50,7 +50,7 @@ namespace TreeAndQueueConsole
     {
         public static readonly Random _random = new Random();
 
-        public static void Main(string[] args)
+        public static void BFTreeSMain(string[] args)
         {
             int step = 1;
             Console.WriteLine("===== 树形结构 + 队列 + 全节点遍历演示程序 =====");
