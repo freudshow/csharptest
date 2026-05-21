@@ -10,7 +10,7 @@ namespace ConsoleApp1
     public class OllamaService
     {
         private static readonly HttpClient client = new HttpClient();
-        private const string OllamaUrl = "http://localhost:11434/v1";
+        private const string OllamaUrl = "http://localhost:11434/api/tags";
         private const string _ModelName = "gemma4:e4b"; // Change this to your model
         public static string ModelName { get { return _ModelName; } }
 
@@ -56,7 +56,7 @@ namespace ConsoleApp1
         }
     }
 
-    public class Program
+    public class OllamaProgram
     {
         public static async Task OllamaMain(string[] args)
         {

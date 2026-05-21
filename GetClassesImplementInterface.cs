@@ -118,7 +118,7 @@ namespace ConsoleApp1
 
     public class GetClassesImplementInterface
     {
-        public static void Main(string[] args)
+        public static void InterfaceMain(string[] args)
         {
             List<Type> classes = InterfaceReflectHelper.GetImplementTypesInCurrentAssembly<ITestInterface>();
 
