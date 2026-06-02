@@ -240,7 +240,11 @@ namespace ConsoleApp1
         public static void DFS<T>(Graph<T> graph, T startNode, Action<T> visitAction) where T : notnull
         {
             var visited = new HashSet<T>();
+            Console.WriteLine($"--- DFS Recursive from {startNode} ---");
             DFSRecursive(graph, startNode, visited, visitAction);
+
+            Console.WriteLine($"--- DFS Iterative from {startNode} ---");
+            DFSIterative(graph, startNode, visitAction);
         }
 
         private static void DFSRecursive<T>(Graph<T> graph, T current, HashSet<T> visited, Action<T> visitAction) where T : notnull
@@ -270,7 +274,8 @@ namespace ConsoleApp1
                 {
                     visited.Add(current);
                     visitAction(current);
-                    foreach (var edge in graph.GetEdges(current))
+                    var reverseEdges = graph.GetEdges(current).Reverse();
+                    foreach (var edge in reverseEdges)
                     {
                         stack.Push(edge.Target);
                     }
@@ -456,6 +461,13 @@ namespace ConsoleApp1
                 if (IsDirectedCycleRecursive(graph, vertex, visited, onStack))
                     return true;
             }
+
+            foreach (var vertex in graph.GetVertices())
+            {
+                if (IsDirectedCycleIterative(graph, vertex, visited, onStack))
+                    return true;
+            }
+
             return false;
         }
 
@@ -477,6 +489,141 @@ namespace ConsoleApp1
             return false;
         }
 
+        private static bool IsDirectedCycleIterative<T>(Graph<T> graph, T current, HashSet<T> visited, HashSet<T> onStack) where T : notnull
+        {
+            // Preserve original short-circuit behavior
+            if (onStack.Contains(current))
+            {
+                return true;
+            }
+
+            if (visited.Contains(current))
+            {
+                return false;
+            }
+
+            // Iterative DFS emulating recursion using an explicit stack of enumerators
+            var stack = new Stack<(T node, IEnumerator<Edge<T>> enumerator)>();
+            bool foundCycle = false;
+
+            // Push start node
+            visited.Add(current);
+            onStack.Add(current);
+            var startEnum = graph.GetEdges(current).GetEnumerator();
+            stack.Push((current, startEnum));
+
+            try
+            {
+                while (stack.Count > 0)
+                {
+                    var (node, enumerator) = stack.Peek();
+
+                    if (enumerator.MoveNext())
+                    {
+                        var neighbor = enumerator.Current.Target;
+
+                        if (onStack.Contains(neighbor))
+                        {
+                            foundCycle = true;
+                            break;
+                        }
+
+                        if (!visited.Contains(neighbor))
+                        {
+                            visited.Add(neighbor);
+                            onStack.Add(neighbor);
+                            var neighEnum = graph.GetEdges(neighbor).GetEnumerator();
+                            stack.Push((neighbor, neighEnum));
+                        }
+                        // if visited and not onStack, ignore
+                    }
+                    else
+                    {
+                        // finished exploring node
+                        stack.Pop();
+                        enumerator.Dispose();
+                        onStack.Remove(node);
+                    }
+                }
+            }
+            finally
+            {
+                // Ensure any remaining enumerators are disposed and onStack cleaned up
+                while (stack.Count > 0)
+                {
+                    var frame = stack.Pop();
+                    try { frame.enumerator.Dispose(); } catch { }
+                    onStack.Remove(frame.node);
+                }
+            }
+
+            return foundCycle;
+        }
+
+        // 辅助类：记录当前节点的访问进度
+        private class NodeVisitState<T>
+        {
+            public T Node { get; }
+            public IEnumerator<Edge<T>> EdgeEnumerator { get; }
+
+            public NodeVisitState(T node, IEnumerator<Edge<T>> enumerator)
+            {
+                Node = node;
+                EdgeEnumerator = enumerator;
+            }
+        }
+
+        public static bool HasCycleDirectedIterative<T>(Graph<T> graph) where T : notnull
+        {
+            var visited = new HashSet<T>();
+            var onStack = new HashSet<T>();
+
+            foreach (var startNode in graph.GetVertices())
+            {
+                if (visited.Contains(startNode)) continue;
+
+                // 模拟递归栈
+                var stack = new Stack<NodeVisitState<T>>();
+
+                // 初始进入
+                visited.Add(startNode);
+                onStack.Add(startNode);
+                stack.Push(new NodeVisitState<T>(startNode, graph.GetEdges(startNode).GetEnumerator()));
+
+                while (stack.Count > 0)
+                {
+                    var currentState = stack.Peek();
+                    T u = currentState.Node;
+
+                    // 尝试移动到下一个邻居
+                    if (currentState.EdgeEnumerator.MoveNext())
+                    {
+                        T v = currentState.EdgeEnumerator.Current.Target;
+
+                        if (onStack.Contains(v))
+                        {
+                            return true; // 发现后向边 -> 有环！
+                        }
+
+                        if (!visited.Contains(v))
+                        {
+                            visited.Add(v);
+                            onStack.Add(v);
+                            // 像递归调用一样，将新节点压栈，并为其创建邻居迭代器
+                            stack.Push(new NodeVisitState<T>(v, graph.GetEdges(v).GetEnumerator()));
+                        }
+                    }
+                    else
+                    {
+                        // 所有邻居都访问完了，执行回溯操作
+                        stack.Pop();
+                        onStack.Remove(u);
+                    }
+                }
+            }
+            return false;
+        }
+
         #endregion 有向图环检测
     }
 
@@ -485,6 +632,18 @@ namespace ConsoleApp1
     // --- 测试程序 ---
     internal class Program
     {
+        public interface ITestInterface
+        {
+            int ID { get; set; }
+            string Name { get; set; }
+        }
+
+        public class TestClass : ITestInterface
+        {
+            public int ID { get; set; }
+            public string Name { get; set; }
+        }
+
         private static void Main()
         {
             // 1. 创建一个加权无向图
@@ -499,6 +658,10 @@ namespace ConsoleApp1
 
             Console.WriteLine("--- BFS Traversal from A ---");
             GraphAlgorithms.BFS(graph, "A", node => Console.WriteLine("current Node: " + node + " "));
+            Console.WriteLine("\n");
+
+            Console.WriteLine("--- DFS Traversal from A ---");
+            GraphAlgorithms.DFS(graph, "A", node => Console.WriteLine("current Node: " + node + " "));
             Console.WriteLine("\n");
 
             Console.WriteLine("--- Dijkstra Shortest Paths from A ---");
