@@ -1,706 +1,648 @@
-/******************************************************************************************************************
- * grammar eval.g4;
- * ----------------------------------------------------------------------------------------------------------------
- * # Top-level
- * prog : stmt EOF ;
- * stmt : assignStmt | expr ;
- * assignStmt : HASH ASSIGN expr ;
- * ----------------------------------------------------------------------------------------------------------------
- * # Expression entry
- * expr : assignExpr ;
- *
- * # Priority 1 (lowest): assignment, right-associative
- * assignExpr
- *     : logicalOr ( ASSIGN assignExpr )?   # priority 1, right-assoc
- *     ;
- *
- * # Priority 2: || (left-assoc)
- * logicalOr
- *     : logicalAnd ( OROR logicalAnd )*
- *     ;
- *
- * # Priority 3: && (left-assoc)
- * logicalAnd
- *     : bitOr ( ANDAND bitOr )*
- *     ;
- *
- * # Priority 4: bitwise OR '|' (left-assoc)
- * bitOr
- *     : bitXor ( PIPE bitXor )*
- *     ;
- *
- * # Priority 5: bitwise XOR '^' (left-assoc)
- * bitXor
- *     : bitAnd ( CARET bitAnd )*
- *     ;
- *
- * # Priority 6: bitwise AND '&' (left-assoc)
- * bitAnd
- *     : equality ( AMP equality )*
- *     ;
- *
- * # Priority 7: equality '==' '!=' (left-assoc)
- * equality
- *     : relational ( (EQ | NEQ) relational )*
- *     ;
- *
- * # Priority 8: relational < <= > >= (left-assoc)
- * relational
- *     : shift ( (LT | LTE | GT | GTE) shift )*
- *     ;
- *
- * # Priority 9: shifts << >> (left-assoc)
- * shift
- *     : add ( (LSHIFT | RSHIFT) add )*
- *     ;
- *
- * # Priority 10: addition/subtraction + - (left-assoc)
- * add
- *     : mul ( (PLUS | MINUS) mul )*
- *     ;
- *
- * # Priority 11: multiply/divide * / (left-assoc)
- * mul
- *     : unary ( (MULT | DIV) unary )*
- *     ;
- *
- * # Priority 12: unary: ~, !, - (right-assoc)
- * unary
- *     : ( TILDE | NOT | MINUS ) unary
- *     | power
- *     ;
- *
- * # Priority 13: sin, cos function calls (tighter than unary)
- * # handled as primary forms below
- *
- * # Priority 14 (highest): exp function call (tightest)
- * # handled as primary form below
- *
- * # power/primary level (functions and atoms)
- * power
- *     : expFunc                 # ExpFunction
- *     | sinCosFunc              # SinCosFunction
- *     | primary                 # AtomPrimary
- *     ;
- *
- * # function productions
- * expFunc
- *     : EXP LP expr RP          # 'exp(expr)' ¡ª priority 14 (highest)
- *     ;
- *
- * sinCosFunc
- *     : ( SIN | COS ) LP expr RP  # 'sin(expr)' or 'cos(expr)' ¡ª priority 13
- *     ;
- *
- * # primary atoms
- * primary
- *     : NUMBER
- *     | HASH                     # realtime marker '#123'
- *     | LP expr RP
- *     ;
- *
- * # Lexer tokens (representative)
- * PLUS    : '+' ;
- * MINUS   : '-' ;
- * MULT    : '*' ;
- * DIV     : '/' ;
- * NOT     : '!' ;
- * ANDAND  : '&&' ;
- * OROR    : '||' ;
- * GT      : '>' ;
- * GTE     : '>=' ;
- * LT      : '<' ;
- * LTE     : '<=' ;
- * EQ      : '==' ;
- * NEQ     : '!=' ;
- * AMP     : '&' ;
- * PIPE    : '|' ;
- * CARET   : '^' ;
- * TILDE   : '~' ;
- * LSHIFT  : '<<' ;
- * RSHIFT  : '>>' ;
- * LP      : '(' ;
- * RP      : ')' ;
- * ASSIGN  : '=' ;
- *
- * # functions and identifiers
- * SIN     : 'sin' ;
- * COS     : 'cos' ;
- * EXP     : 'exp' ;
- * NUMBER  : [0-9]+ ('.' [0-9]*)? | '.' [0-9]+ ;
- * HASH    : '#' [0-9]+ ;
- * IDENT   : [a-zA-Z]+ ;
- *
- * # whitespace & error
- * WS      : [ \t\r\n]+ -> skip ;
- * ERROR_CHAR : . -> channel(HIDDEN) ;
- ****************************************************************************************************************/
-
-using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Text;
 
-internal class EvaluateProgram
+namespace ConsoleApp1
 {
-    private enum TokenType
+    // Ported from eval.c (subset faithfully adapted)
+    public enum TokenType
     {
-        NUM, HASH, IDENT,
-        PLUS, MINUS, MUL, DIV,
-        LP, RP,
-        NOT, NEQ, ANDAND, OROR,
-        GT, GTE, LT, LTE, EQ,
-        AMP, PIPE, CARET, TILDE,
-        LSHIFT, RSHIFT,
-        ASSIGN,
-        EOF, INVALID
+        T_NUM,
+        T_REALDB,
+        T_REALDB_LINK_DEV_REG,
+        T_IDENT,
+        T_PLUS,
+        T_MINUS,
+        T_MUL,
+        T_DIV,
+        T_LP,
+        T_RP,
+        T_NOT,
+        T_NEQ,
+        T_ANDAND,
+        T_OROR,
+        T_GT,
+        T_GTE,
+        T_LT,
+        T_LTE,
+        T_EQ,
+        T_AMP,
+        T_PIPE,
+        T_CARET,
+        T_TILDE,
+        T_LSHIFT,
+        T_RSHIFT,
+        T_ASSIGN,
+        T_COMMA,
+        T_EOF,
+        T_INVALID
     }
 
-    private class Token
+    public class RealDbLinkDevReg
+    {
+        public int LinkNo;
+        public int DevNo;
+        public int RegNo;
+    }
+
+    public class Token
     {
         public TokenType Type;
-        public string Text;
-        public int Pos; // start index in input
+        public string? Text;
         public double Num;
-
-        public Token(TokenType t, string text = null)
-        {
-            Type = t;
-            Text = text;
-        }
-
-        public override string ToString() => Text ?? Type.ToString();
+        public int Pos;
+        public RealDbLinkDevReg? RealDbRef;
     }
 
-    private class Tokenizer
+    public class TokenList
     {
-        private readonly string s; private int i, n;
+        public List<Token> Arr = new List<Token>();
+        public int Idx = 0;
 
-        public Tokenizer(string input)
+        public Token Peek() => Idx < Arr.Count ? Arr[Idx] : new Token { Type = TokenType.T_EOF };
+
+        public Token Next() => Idx < Arr.Count ? Arr[Idx++] : new Token { Type = TokenType.T_EOF };
+
+        public void Push(Token t) => Arr.Add(t);
+    }
+
+    public enum NodeType { N_NUMBER, N_REAL_DATABASE, N_REALDB_LINK_DEV_REG, N_UNARY, N_BINARY, N_FUNC, N_ASSIGN }
+
+    public enum UnaryOp { U_NEG, U_NOT, U_BITNOT }
+
+    public enum BinaryOp { B_ADD, B_SUB, B_MUL, B_DIV, B_LSHIFT, B_RSHIFT, B_GT, B_GTE, B_LT, B_LTE, B_EQ, B_NEQ, B_BITAND, B_BITXOR, B_BITOR, B_ANDAND, B_OROR }
+
+    public class ASTNode
+    {
+        public NodeType Type;
+        public int Pos;
+        public double Number;
+        public int RealDataBaseId;
+        public RealDbLinkDevReg? LinkDevReg;
+        public UnaryOp UnaryOp;
+        public ASTNode? Child;
+        public BinaryOp BinaryOp;
+        public ASTNode? Left;
+        public ASTNode? Right;
+        public string? FuncName;
+        public Delegate? FuncPtr;
+        public ASTNode[]? Args;
+        public int Argc;
+        public int AssignId;
+        public ASTNode? Rhs;
+    }
+
+    public class ArithmeticEvaluator
+    {
+        public ASTNode Ast;
+
+        public ArithmeticEvaluator(ASTNode ast)
         {
-            s = input ?? "";
-            i = 0;
-            n = s.Length;
+            Ast = ast;
         }
 
-        private void Skip()
+        public double Eval() => EvalNode(Ast);
+
+        private static double Pi() => 3.14159265358979323846;
+
+        static double E() => 2.71828182845904523536;
+
+        private static double Fac(double a)
         {
-            while (i < n && char.IsWhiteSpace(s[i]))
-                i++;
+            if (a < 0.0) return double.NaN;
+            if (a > uint.MaxValue) return double.PositiveInfinity;
+            uint ua = (uint)a;
+            ulong result = 1;
+            for (ulong i = 1; i <= ua; i++)
+            {
+                if (i > ulong.MaxValue / result) return double.PositiveInfinity;
+                result *= i;
+            }
+            return (double)result;
         }
 
-        public List<Token> Tokenize()
+        private static double Ncr(double n, double r)
         {
-            var list = new List<Token>();
+            if (n < 0 || r < 0 || n < r) return double.NaN;
+            if (n > uint.MaxValue || r > uint.MaxValue) return double.PositiveInfinity;
+            ulong un = (uint)n, ur = (uint)r;
+            if (ur > un / 2) ur = un - ur;
+            ulong res = 1;
+            for (ulong i = 1; i <= ur; i++)
+            {
+                if (res > ulong.MaxValue / (un - ur + i)) return double.PositiveInfinity;
+                res = res * (un - ur + i) / i;
+            }
+            return (double)res;
+        }
+
+        private static double Npr(double n, double r) => Ncr(n, r) * Fac(r);
+
+        static double Max(double a, double b) => a > b ? a : b;
+
+        private static double Min(double a, double b) => a < b ? a : b;
+
+        private static readonly (string name, Delegate func, int arity)[] Builtins = new (string, Delegate, int)[] {
+            ("abs", new Func<double,double>(Math.Abs),1),
+            ("acos", new Func<double,double>(Math.Acos),1),
+            ("asin", new Func<double,double>(Math.Asin),1),
+            ("atan", new Func<double,double>(Math.Atan),1),
+            ("atan2", new Func<double,double,double>(Math.Atan2),2),
+            ("ceil", new Func<double,double>(Math.Ceiling),1),
+            ("cos", new Func<double,double>(Math.Cos),1),
+            ("cosh", new Func<double,double>(Math.Cosh),1),
+            ("e", new Func<double>(E),0),
+            ("exp", new Func<double,double>(Math.Exp),1),
+            ("fac", new Func<double,double>(Fac),1),
+            ("floor", new Func<double,double>(Math.Floor),1),
+            ("ln", new Func<double,double>(Math.Log),1),
+            ("log", new Func<double,double>(Math.Log),1),
+            ("log10", new Func<double,double>(Math.Log10),1),
+            ("ncr", new Func<double,double,double>(Ncr),2),
+            ("npr", new Func<double,double,double>(Npr),2),
+            ("pi", new Func<double>(Pi),0),
+            ("pow", new Func<double,double,double>(Math.Pow),2),
+            ("sin", new Func<double,double>(Math.Sin),1),
+            ("sinh", new Func<double,double>(Math.Sinh),1),
+            ("sqrt", new Func<double,double>(Math.Sqrt),1),
+            ("tan", new Func<double,double>(Math.Tan),1),
+            ("tanh", new Func<double,double>(Math.Tanh),1),
+            (null!, null!, 0)
+        };
+
+        private static readonly (string name, Delegate func, int arity)[] Custom = new (string, Delegate, int)[] {
+            ("max", new Func<double,double,double>(Max),2),
+            ("min", new Func<double,double,double>(Min),2)
+        };
+
+        private static (string name, Delegate func, int arity)? FindBuiltin(string name)
+        {
+            int lo = 0, hi = Builtins.Length - 2;
+            while (hi >= lo)
+            {
+                int i = lo + ((hi - lo) / 2);
+                int c = string.Compare(name, Builtins[i].name, StringComparison.Ordinal);
+                if (c == 0) return Builtins[i];
+                if (c > 0) lo = i + 1; else hi = i - 1;
+            }
+            return null;
+        }
+
+        private static (string name, Delegate func, int arity)? FindCustom(string name)
+        {
+            foreach (var t in Custom) if (t.name == name) return t;
+            return null;
+        }
+
+        private static int FastGetRtdbNo(int linkNo, int devNo, int regNo)
+        {
+            Console.WriteLine($"linkNo={linkNo}, devNo={devNo}, regNo={regNo}");
+            return 132;
+        }
+
+        private static double GetValueByRealNo(int realNo)
+        {
+            Console.WriteLine($"realNo={realNo}");
+            return 42.0;
+        }
+
+        static void SetValueByRealNo(int realNo, float value)
+        {
+            Console.WriteLine($"Set realNo={realNo} to value={value}");
+        }
+
+        private double EvalNode(ASTNode n)
+        {
+            if (n == null) return double.NaN;
+            switch (n.Type)
+            {
+                case NodeType.N_NUMBER: return n.Number;
+                case NodeType.N_REAL_DATABASE: return GetValueByRealNo(n.RealDataBaseId);
+                case NodeType.N_REALDB_LINK_DEV_REG:
+                    {
+                        int rtdbNo = FastGetRtdbNo(n.LinkDevReg!.LinkNo, n.LinkDevReg.DevNo, n.LinkDevReg.RegNo);
+                        if (rtdbNo < 0) return double.NaN;
+                        return GetValueByRealNo(rtdbNo);
+                    }
+                case NodeType.N_UNARY:
+                    {
+                        double v = EvalNode(n.Child!);
+                        if (n.UnaryOp == UnaryOp.U_NEG) return -v;
+                        if (n.UnaryOp == UnaryOp.U_NOT) return v != 0.0 ? 0.0 : 1.0;
+                        return (double)(~((long)v));
+                    }
+                case NodeType.N_BINARY:
+                    {
+                        switch (n.BinaryOp)
+                        {
+                            case BinaryOp.B_ADD: return EvalNode(n.Left!) + EvalNode(n.Right!);
+                            case BinaryOp.B_SUB: return EvalNode(n.Left!) - EvalNode(n.Right!);
+                            case BinaryOp.B_MUL: return EvalNode(n.Left!) * EvalNode(n.Right!);
+                            case BinaryOp.B_DIV:
+                                {
+                                    double r = EvalNode(n.Right!);
+                                    if (r == 0) return double.NaN;
+                                    return EvalNode(n.Left!) / r;
+                                }
+                            case BinaryOp.B_LSHIFT: return (double)(((long)EvalNode(n.Left!)) << (int)EvalNode(n.Right!));
+                            case BinaryOp.B_RSHIFT: return (double)(((long)EvalNode(n.Left!)) >> (int)EvalNode(n.Right!));
+                            case BinaryOp.B_GT: return EvalNode(n.Left!) > EvalNode(n.Right!) ? 1.0 : 0.0;
+                            case BinaryOp.B_GTE: return EvalNode(n.Left!) >= EvalNode(n.Right!) ? 1.0 : 0.0;
+                            case BinaryOp.B_LT: return EvalNode(n.Left!) < EvalNode(n.Right!) ? 1.0 : 0.0;
+                            case BinaryOp.B_LTE: return EvalNode(n.Left!) <= EvalNode(n.Right!) ? 1.0 : 0.0;
+                            case BinaryOp.B_EQ: return EvalNode(n.Left!) == EvalNode(n.Right!) ? 1.0 : 0.0;
+                            case BinaryOp.B_NEQ: return EvalNode(n.Left!) != EvalNode(n.Right!) ? 1.0 : 0.0;
+                            case BinaryOp.B_BITAND: return (double)(((long)EvalNode(n.Left!)) & ((long)EvalNode(n.Right!)));
+                            case BinaryOp.B_BITXOR: return (double)(((long)EvalNode(n.Left!)) ^ ((long)EvalNode(n.Right!)));
+                            case BinaryOp.B_BITOR: return (double)(((long)EvalNode(n.Left!)) | ((long)EvalNode(n.Right!)));
+                            case BinaryOp.B_ANDAND:
+                                {
+                                    double lv = EvalNode(n.Left!);
+                                    if (lv == 0.0) return 0.0; // short-circuit
+                                    double rv = EvalNode(n.Right!);
+                                    return (rv == 0.0) ? 0.0 : 1.0;
+                                }
+                            case BinaryOp.B_OROR:
+                                {
+                                    double lv = EvalNode(n.Left!);
+                                    if (lv != 0.0) return 1.0; // short-circuit
+                                    double rv = EvalNode(n.Right!);
+                                    return (rv == 0.0) ? 0.0 : 1.0;
+                                }
+                        }
+                        break;
+                    }
+                case NodeType.N_FUNC:
+                    {
+                        double[] args = new double[n.Argc < 4 ? n.Argc : 4];
+                        for (int i = 0; i < n.Argc && i < 4; ++i) args[i] = EvalNode(n.Args![i]);
+                        if (n.FuncPtr == null) return double.NaN;
+                        if (n.Argc == 0)
+                        {
+                            var f0 = (Func<double>)n.FuncPtr;
+                            return f0();
+                        }
+                        else if (n.Argc == 1)
+                        {
+                            var f1 = n.FuncPtr as Func<double, double>;
+                            if (f1 == null) return double.NaN;
+                            // handle degree/radian conversions similar to C version
+                            if (f1 == (Func<double, double>)Math.Sin || f1 == (Func<double, double>)Math.Cos || f1 == (Func<double, double>)Math.Tan)
+                            {
+                                return f1(args[0] * Pi() / 180.0);
+                            }
+                            if (f1 == (Func<double, double>)Math.Asin || f1 == (Func<double, double>)Math.Acos || f1 == (Func<double, double>)Math.Atan)
+                            {
+                                return f1(args[0]) * 180.0 / Pi();
+                            }
+                            return f1(args[0]);
+                        }
+                        else if (n.Argc == 2)
+                        {
+                            var f2 = n.FuncPtr as Func<double, double, double>;
+                            if (f2 == null) return double.NaN;
+                            return f2(args[0], args[1]);
+                        }
+                        return double.NaN;
+                    }
+                case NodeType.N_ASSIGN:
+                    {
+                        double v = EvalNode(n.Rhs!);
+                        if (n.AssignId >= 0)
+                        {
+                            SetValueByRealNo(n.AssignId, (float)v);
+                        }
+                        else
+                        {
+                            int rtdbNo = FastGetRtdbNo(n.LinkDevReg!.LinkNo, n.LinkDevReg.DevNo, n.LinkDevReg.RegNo);
+                            if (rtdbNo < 0) return double.NaN;
+                            SetValueByRealNo(rtdbNo, (float)v);
+                        }
+                        return v;
+                    }
+            }
+            return double.NaN;
+        }
+    }
+
+    public static class Eval
+    {
+        // duplicate of builtin/custom function table used by the parser
+        private static readonly (string name, Delegate func, int arity)[] Builtins = new (string, Delegate, int)[] {
+            ("abs", new Func<double,double>(Math.Abs),1),
+            ("acos", new Func<double,double>(Math.Acos),1),
+            ("asin", new Func<double,double>(Math.Asin),1),
+            ("atan", new Func<double,double>(Math.Atan),1),
+            ("atan2", new Func<double,double,double>(Math.Atan2),2),
+            ("ceil", new Func<double,double>(Math.Ceiling),1),
+            ("cos", new Func<double,double>(Math.Cos),1),
+            ("cosh", new Func<double,double>(Math.Cosh),1),
+            ("e", new Func<double>(() => 2.71828182845904523536),0),
+            ("exp", new Func<double,double>(Math.Exp),1),
+            ("fac", new Func<double,double>((d) => { if (d<0) return double.NaN; double r=1; for(int i=1;i<= (int)d;i++) r*=i; return r; }),1),
+            ("floor", new Func<double,double>(Math.Floor),1),
+            ("ln", new Func<double,double>(Math.Log),1),
+            ("log", new Func<double,double>(Math.Log),1),
+            ("log10", new Func<double,double>(Math.Log10),1),
+            ("ncr", new Func<double,double,double>((a,b)=> { return 0.0; }),2),
+            ("npr", new Func<double,double,double>((a,b)=> { return 0.0; }),2),
+            ("pi", new Func<double>(() => 3.14159265358979323846),0),
+            ("pow", new Func<double,double,double>(Math.Pow),2),
+            ("sin", new Func<double,double>(Math.Sin),1),
+            ("sinh", new Func<double,double>(Math.Sinh),1),
+            ("sqrt", new Func<double,double>(Math.Sqrt),1),
+            ("tan", new Func<double,double>(Math.Tan),1),
+            ("tanh", new Func<double,double>(Math.Tanh),1),
+            (null!, null!, 0)
+        };
+
+        private static readonly (string name, Delegate func, int arity)[] Custom = new (string, Delegate, int)[] {
+            ("max", new Func<double,double,double>((a,b)=> a>b?a:b),2),
+            ("min", new Func<double,double,double>((a,b)=> a<b?a:b),2)
+        };
+
+        static (string name, Delegate func, int arity)? FindBuiltin(string name)
+        {
+            int lo = 0, hi = Builtins.Length - 2;
+            while (hi >= lo)
+            {
+                int i = lo + ((hi - lo) / 2);
+                int c = string.Compare(name, Builtins[i].name, StringComparison.Ordinal);
+                if (c == 0) return Builtins[i];
+                if (c > 0) lo = i + 1; else hi = i - 1;
+            }
+            return null;
+        }
+
+        private static (string name, Delegate func, int arity)? FindCustom(string name)
+        {
+            foreach (var t in Custom) if (t.name == name) return t;
+            return null;
+        }
+
+        // Tokenize, parse and return ArithmeticEvaluator
+        public static ArithmeticEvaluator? GetNewEvaluator(string input)
+        {
+            var toks = new TokenList();
+            Tokenize(input, toks);
+            // check invalid tokens
+            var invalid = toks.Arr.FirstOrDefault(t => t.Type == TokenType.T_INVALID);
+            if (invalid != null) return null;
+            toks.Idx = 0;
+            var ast = ParseAssign(toks);
+            if (ast == null) return null;
+            if (toks.Peek().Type != TokenType.T_EOF) return null;
+            return new ArithmeticEvaluator(ast);
+        }
+
+        private static void Tokenize(string s, TokenList outList)
+        {
+            int i = 0; int n = s.Length;
             while (true)
             {
-                Skip();
-                if (i >= n) { list.Add(new Token(TokenType.EOF)); break; }
+                while (i < n && char.IsWhiteSpace(s[i])) i++;
+                if (i >= n) { outList.Push(new Token { Type = TokenType.T_EOF, Pos = i }); break; }
                 char c = s[i];
-                if (c == '&' && i + 1 < n && s[i + 1] == '&') { list.Add(new Token(TokenType.ANDAND, "&&")); i += 2; continue; }
-                if (c == '|' && i + 1 < n && s[i + 1] == '|') { list.Add(new Token(TokenType.OROR, "||")); i += 2; continue; }
-                if (c == '<' && i + 1 < n && s[i + 1] == '<') { list.Add(new Token(TokenType.LSHIFT, "<<")); i += 2; continue; }
-                if (c == '>' && i + 1 < n && s[i + 1] == '>') { list.Add(new Token(TokenType.RSHIFT, ">>")); i += 2; continue; }
-                if (c == '>' && i + 1 < n && s[i + 1] == '=') { list.Add(new Token(TokenType.GTE, ">=")); i += 2; continue; }
-                if (c == '<' && i + 1 < n && s[i + 1] == '=') { list.Add(new Token(TokenType.LTE, "<=")); i += 2; continue; }
-                if (c == '!' && i + 1 < n && s[i + 1] == '=') { list.Add(new Token(TokenType.NEQ, "!=")); i += 2; continue; }
-                if (c == '=' && i + 1 < n && s[i + 1] == '=') { list.Add(new Token(TokenType.EQ, "==")); i += 2; continue; }
-                if (char.IsDigit(c) || c == '.')
+                if (c == '&' && i + 1 < n && s[i + 1] == '&') { outList.Push(new Token { Type = TokenType.T_ANDAND, Text = "&&", Pos = i }); i += 2; continue; }
+                if (c == '|' && i + 1 < n && s[i + 1] == '|') { outList.Push(new Token { Type = TokenType.T_OROR, Text = "||", Pos = i }); i += 2; continue; }
+                if (c == '<' && i + 1 < n && s[i + 1] == '<') { outList.Push(new Token { Type = TokenType.T_LSHIFT, Text = "<<", Pos = i }); i += 2; continue; }
+                if (c == '>' && i + 1 < n && s[i + 1] == '>') { outList.Push(new Token { Type = TokenType.T_RSHIFT, Text = ">>", Pos = i }); i += 2; continue; }
+                if (c == '>' && i + 1 < n && s[i + 1] == '=') { outList.Push(new Token { Type = TokenType.T_GTE, Text = ">=", Pos = i }); i += 2; continue; }
+                if (c == '<' && i + 1 < n && s[i + 1] == '=') { outList.Push(new Token { Type = TokenType.T_LTE, Text = "<=", Pos = i }); i += 2; continue; }
+                if (c == '!' && i + 1 < n && s[i + 1] == '=') { outList.Push(new Token { Type = TokenType.T_NEQ, Text = "!=", Pos = i }); i += 2; continue; }
+                if (c == '=' && i + 1 < n && s[i + 1] == '=') { outList.Push(new Token { Type = TokenType.T_EQ, Text = "==", Pos = i }); i += 2; continue; }
+                if (char.IsDigit(c))
                 {
-                    int start = i;
-                    while (i < n && (char.IsDigit(s[i]) || s[i] == '.')) i++;
-                    string sub = s.Substring(start, i - start);
-                    if (!double.TryParse(sub, NumberStyles.Float, CultureInfo.InvariantCulture, out double val)) throw new Exception("Invalid number: " + sub);
-                    var tk = new Token(TokenType.NUM, sub); tk.Num = val; tk.Pos = start; list.Add(tk); continue;
+                    int start = i; while (i < n && char.IsDigit(s[i])) i++;
+                    if (i < n && s[i] == '.')
+                    {
+                        int dot = i;
+                        if (i + 1 < n && char.IsDigit(s[i + 1])) { i++; while (i < n && char.IsDigit(s[i])) i++; }
+                        else i = dot;
+                    }
+                    var txt = s.Substring(start, i - start);
+                    double v = double.Parse(txt, CultureInfo.InvariantCulture);
+                    outList.Push(new Token { Type = TokenType.T_NUM, Text = txt, Num = v, Pos = start });
+                    continue;
                 }
-
                 if (c == '#')
                 {
-                    i++;
-                    int start = i;
-                    while (i < n && char.IsDigit(s[i])) i++;
-                    if (start == i) throw new Exception("Invalid # marker");
-                    string id = s.Substring(start, i - start);
-                    var th = new Token(TokenType.HASH, id); th.Pos = start - 1; list.Add(th);
+                    int hashPos = i; i++;
+                    if (i < n && s[i] == '(')
+                    {
+                        i++;
+                        int[] vals = new int[3]; int vi = 0; bool ok = true;
+                        for (vi = 0; vi < 3 && ok; vi++)
+                        {
+                            while (i < n && char.IsWhiteSpace(s[i])) i++;
+                            int numStart = i;
+                            if (i < n && s[i] == '-') i++;
+                            while (i < n && char.IsDigit(s[i])) i++;
+                            if (i == numStart || (i == numStart + 1 && s[numStart] == '-')) { ok = false; break; }
+                            vals[vi] = int.Parse(s.Substring(numStart, i - numStart), CultureInfo.InvariantCulture);
+                            while (i < n && char.IsWhiteSpace(s[i])) i++;
+                            if (vi < 2)
+                            {
+                                if (i < n && s[i] == ',') i++; else { ok = false; break; }
+                            }
+                            else { if (i < n && s[i] == ')') i++; else { ok = false; break; } }
+                        }
+                        if (!ok) { outList.Push(new Token { Type = TokenType.T_INVALID, Pos = hashPos }); break; }
+                        outList.Push(new Token { Type = TokenType.T_REALDB_LINK_DEV_REG, Pos = hashPos, RealDbRef = new RealDbLinkDevReg { LinkNo = vals[0], DevNo = vals[1], RegNo = vals[2] } });
+                        continue;
+                    }
+                    int start = i; while (i < n && char.IsDigit(s[i])) i++;
+                    if (start == i) { outList.Push(new Token { Type = TokenType.T_INVALID, Pos = start - 1 }); break; }
+                    var txt = s.Substring(start, i - start);
+                    outList.Push(new Token { Type = TokenType.T_REALDB, Text = txt, Pos = start - 1 });
                     continue;
                 }
-
-                if (char.IsLetter(c))
+                if (char.IsLetter(c) || c == '_')
                 {
-                    int start = i;
-                    while (i < n && char.IsLetter(s[i])) i++;
-                    string id = s.Substring(start, i - start);
-                    var ti = new Token(TokenType.IDENT, id); ti.Pos = start; list.Add(ti);
-                    continue;
+                    int start = i; i++; while (i < n && (char.IsLetterOrDigit(s[i]) || s[i] == '_')) i++; var txt = s.Substring(start, i - start); outList.Push(new Token { Type = TokenType.T_IDENT, Text = txt, Pos = start }); continue;
                 }
-
                 switch (c)
                 {
-                    case '+': list.Add(new Token(TokenType.PLUS, "+")); i++; break;
-                    case '-': list.Add(new Token(TokenType.MINUS, "-")); i++; break;
-                    case '*': list.Add(new Token(TokenType.MUL, "*")); i++; break;
-                    case '/': list.Add(new Token(TokenType.DIV, "/")); i++; break;
-                    case '(': list.Add(new Token(TokenType.LP, "(")); i++; break;
-                    case ')': list.Add(new Token(TokenType.RP, ")")); i++; break;
-                    case '!': list.Add(new Token(TokenType.NOT, "!")); i++; break;
-                    case '>': list.Add(new Token(TokenType.GT, ">")); i++; break;
-                    case '<': list.Add(new Token(TokenType.LT, "<")); i++; break;
-                    case '&': list.Add(new Token(TokenType.AMP, "&")); i++; break;
-                    case '|': list.Add(new Token(TokenType.PIPE, "|")); i++; break;
-                    case '^': list.Add(new Token(TokenType.CARET, "^")); i++; break;
-                    case '~': list.Add(new Token(TokenType.TILDE, "~")); i++; break;
-                    case '=': list.Add(new Token(TokenType.ASSIGN, "=")); i++; break;
-                    default: throw new Exception($"Invalid character: {c}");
+                    case '+': outList.Push(new Token { Type = TokenType.T_PLUS, Text = "+", Pos = i }); i++; break;
+                    case '-': outList.Push(new Token { Type = TokenType.T_MINUS, Text = "-", Pos = i }); i++; break;
+                    case '*': outList.Push(new Token { Type = TokenType.T_MUL, Text = "*", Pos = i }); i++; break;
+                    case '/': outList.Push(new Token { Type = TokenType.T_DIV, Text = "/", Pos = i }); i++; break;
+                    case '(': outList.Push(new Token { Type = TokenType.T_LP, Text = "(", Pos = i }); i++; break;
+                    case ')': outList.Push(new Token { Type = TokenType.T_RP, Text = ")", Pos = i }); i++; break;
+                    case '!': outList.Push(new Token { Type = TokenType.T_NOT, Text = "!", Pos = i }); i++; break;
+                    case '>': outList.Push(new Token { Type = TokenType.T_GT, Text = ">", Pos = i }); i++; break;
+                    case '<': outList.Push(new Token { Type = TokenType.T_LT, Text = "<", Pos = i }); i++; break;
+                    case '&': outList.Push(new Token { Type = TokenType.T_AMP, Text = "&", Pos = i }); i++; break;
+                    case '|': outList.Push(new Token { Type = TokenType.T_PIPE, Text = "|", Pos = i }); i++; break;
+                    case '^': outList.Push(new Token { Type = TokenType.T_CARET, Text = "^", Pos = i }); i++; break;
+                    case '~': outList.Push(new Token { Type = TokenType.T_TILDE, Text = "~", Pos = i }); i++; break;
+                    case '=': outList.Push(new Token { Type = TokenType.T_ASSIGN, Text = "=", Pos = i }); i++; break;
+                    case ',': outList.Push(new Token { Type = TokenType.T_COMMA, Text = ",", Pos = i }); i++; break;
+                    default: outList.Push(new Token { Type = TokenType.T_INVALID, Pos = i }); i++; break;
                 }
             }
-
-            return list;
-        }
-    }
-
-    private class Parser
-    {
-        private List<Token> toks; private int pos;
-        private Dictionary<int, double> rt;
-        private bool lastAssignment;
-        private int lastAssignmentId;
-
-        // AST node types
-        private abstract class ExprNode
-        {
-            public int Pos;
-
-            public abstract double Eval(Dictionary<int, double> rt);
-
-            public abstract void Print(String indent, bool last);
         }
 
-        private class NumberNode : ExprNode
+        private static bool Match(TokenList t, TokenType ty)
+        { if (t.Peek().Type == ty) { t.Next(); return true; } return false; }
+
+        static ASTNode? ParseAssign(TokenList toks)
         {
-            public double Value;
-
-            public NumberNode(double v, int pos)
-            { Value = v; Pos = pos; }
-
-            public override double Eval(Dictionary<int, double> rt) => Value;
-
-            public override void Print(string indent, bool last)
+            var cur = toks.Peek();
+            if (cur.Type == TokenType.T_REALDB && toks.Arr.Count > toks.Idx + 1 && toks.Arr[toks.Idx + 1].Type == TokenType.T_ASSIGN)
             {
-                Console.Write(indent);
-                Console.Write(last ? "©¸©¤ " : "©À©¤ ");
-                Console.WriteLine(Value.ToString(CultureInfo.InvariantCulture));
+                var h = toks.Next(); var a = toks.Next(); var rhs = ParseAssign(toks); if (rhs == null) return null; int id = int.Parse(h.Text!); return new ASTNode { Type = NodeType.N_ASSIGN, Pos = a.Pos, AssignId = id, Rhs = rhs };
             }
-        }
-
-        private class HashNode : ExprNode
-        {
-            public int Id;
-
-            public HashNode(int id, int pos)
-            { Id = id; Pos = pos; }
-
-            public override double Eval(Dictionary<int, double> rt) => rt.TryGetValue(Id, out double v) ? v : 0.0;
-
-            public override void Print(string indent, bool last)
+            if (cur.Type == TokenType.T_REALDB_LINK_DEV_REG && toks.Arr.Count > toks.Idx + 1 && toks.Arr[toks.Idx + 1].Type == TokenType.T_ASSIGN)
             {
-                Console.Write(indent);
-                Console.Write(last ? "©¸©¤ " : "©À©¤ ");
-                Console.WriteLine("#" + Id);
+                var h = toks.Next(); var a = toks.Next(); var rhs = ParseAssign(toks); if (rhs == null) return null; return new ASTNode { Type = NodeType.N_ASSIGN, Pos = a.Pos, AssignId = -1, LinkDevReg = h.RealDbRef, Rhs = rhs };
             }
+            return ParseLogicalOr(toks);
         }
 
-        private enum UnaryOp
-        { Negate, Not, BitNot }
-
-        private class UnaryNode : ExprNode
+        private static ASTNode? ParseLogicalOr(TokenList toks)
         {
-            public UnaryOp Op; public ExprNode Operand;
+            var left = ParseLogicalAnd(toks); if (left == null) return null;
+            while (Match(toks, TokenType.T_OROR)) { var right = ParseLogicalAnd(toks); if (right == null) { return null; } left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_OROR, Left = left, Right = right, Pos = left.Pos }; }
+            return left;
+        }
 
-            public UnaryNode(UnaryOp op, ExprNode operand, int pos)
-            { Op = op; Operand = operand; Pos = pos; }
+        static ASTNode? ParseLogicalAnd(TokenList toks)
+        {
+            var left = ParseBitOr(toks); if (left == null) return null;
+            while (Match(toks, TokenType.T_ANDAND)) { var right = ParseBitOr(toks); if (right == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_ANDAND, Left = left, Right = right, Pos = left.Pos }; }
+            return left;
+        }
 
-            public override double Eval(Dictionary<int, double> rt)
+        private static ASTNode? ParseBitOr(TokenList toks)
+        {
+            var left = ParseBitXor(toks); if (left == null) return null;
+            while (Match(toks, TokenType.T_PIPE)) { var r = ParseBitXor(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_BITOR, Left = left, Right = r, Pos = left.Pos }; }
+            return left;
+        }
+
+        static ASTNode? ParseBitXor(TokenList toks)
+        {
+            var left = ParseBitAnd(toks); if (left == null) return null;
+            while (Match(toks, TokenType.T_CARET)) { var r = ParseBitAnd(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_BITXOR, Left = left, Right = r, Pos = left.Pos }; }
+            return left;
+        }
+
+        private static ASTNode? ParseBitAnd(TokenList toks)
+        {
+            var left = ParseEquality(toks); if (left == null) return null;
+            while (Match(toks, TokenType.T_AMP)) { var r = ParseEquality(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_BITAND, Left = left, Right = r, Pos = left.Pos }; }
+            return left;
+        }
+
+        static ASTNode? ParseEquality(TokenList toks)
+        {
+            var left = ParseRelational(toks); if (left == null) return null;
+            while (true)
             {
-                var v = Operand.Eval(rt);
-                return Op switch
+                if (Match(toks, TokenType.T_EQ)) { var r = ParseRelational(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_EQ, Left = left, Right = r, Pos = left.Pos }; }
+                else if (Match(toks, TokenType.T_NEQ)) { var r = ParseRelational(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_NEQ, Left = left, Right = r, Pos = left.Pos }; }
+                else break;
+            }
+            return left;
+        }
+
+        private static ASTNode? ParseRelational(TokenList toks)
+        {
+            var left = ParseShift(toks); if (left == null) return null;
+            while (true)
+            {
+                if (Match(toks, TokenType.T_GT)) { var r = ParseShift(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_GT, Left = left, Right = r, Pos = left.Pos }; }
+                else if (Match(toks, TokenType.T_GTE)) { var r = ParseShift(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_GTE, Left = left, Right = r, Pos = left.Pos }; }
+                else if (Match(toks, TokenType.T_LT)) { var r = ParseShift(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_LT, Left = left, Right = r, Pos = left.Pos }; }
+                else if (Match(toks, TokenType.T_LTE)) { var r = ParseShift(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_LTE, Left = left, Right = r, Pos = left.Pos }; }
+                else break;
+            }
+            return left;
+        }
+
+        private static ASTNode? ParseShift(TokenList toks)
+        {
+            var left = ParseAdd(toks); if (left == null) return null;
+            while (true)
+            {
+                if (Match(toks, TokenType.T_LSHIFT)) { var r = ParseAdd(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_LSHIFT, Left = left, Right = r, Pos = left.Pos }; }
+                else if (Match(toks, TokenType.T_RSHIFT)) { var r = ParseAdd(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_RSHIFT, Left = left, Right = r, Pos = left.Pos }; }
+                else break;
+            }
+            return left;
+        }
+
+        private static ASTNode? ParseAdd(TokenList toks)
+        {
+            var left = ParseMultiply(toks); if (left == null) return null;
+            while (true)
+            {
+                if (Match(toks, TokenType.T_PLUS)) { var r = ParseMultiply(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_ADD, Left = left, Right = r, Pos = left.Pos }; }
+                else if (Match(toks, TokenType.T_MINUS)) { var r = ParseMultiply(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_SUB, Left = left, Right = r, Pos = left.Pos }; }
+                else break;
+            }
+            return left;
+        }
+
+        private static ASTNode? ParseMultiply(TokenList toks)
+        {
+            var left = ParseUnary(toks); if (left == null) return null;
+            while (true)
+            {
+                if (Match(toks, TokenType.T_MUL)) { var r = ParseUnary(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_MUL, Left = left, Right = r, Pos = left.Pos }; }
+                else if (Match(toks, TokenType.T_DIV)) { var r = ParseUnary(toks); if (r == null) return null; left = new ASTNode { Type = NodeType.N_BINARY, BinaryOp = BinaryOp.B_DIV, Left = left, Right = r, Pos = left.Pos }; }
+                else break;
+            }
+            return left;
+        }
+
+        private static ASTNode? ParseUnary(TokenList toks)
+        {
+            if (Match(toks, TokenType.T_NOT)) { var op = ParseUnary(toks); if (op == null) return null; return new ASTNode { Type = NodeType.N_UNARY, UnaryOp = UnaryOp.U_NOT, Child = op, Pos = op.Pos }; }
+            if (Match(toks, TokenType.T_TILDE)) { var op = ParseUnary(toks); if (op == null) return null; return new ASTNode { Type = NodeType.N_UNARY, UnaryOp = UnaryOp.U_BITNOT, Child = op, Pos = op.Pos }; }
+            if (Match(toks, TokenType.T_MINUS)) { var op = ParseUnary(toks); if (op == null) return null; return new ASTNode { Type = NodeType.N_UNARY, UnaryOp = UnaryOp.U_NEG, Child = op, Pos = op.Pos }; }
+            return ParsePower(toks);
+        }
+
+        private static ASTNode? ParsePower(TokenList toks)
+        {
+            var cur = toks.Peek();
+            (string name, Delegate func, int arity)? func = null;
+            if (cur.Type == TokenType.T_IDENT && cur.Text != null)
+            {
+                func = FindBuiltin(cur.Text) ?? FindCustom(cur.Text);
+            }
+            if (cur.Type == TokenType.T_IDENT && func != null)
+            {
+                toks.Next(); if (!Match(toks, TokenType.T_LP)) return null;
+                var args = new List<ASTNode>();
+                if (!Match(toks, TokenType.T_RP))
                 {
-                    UnaryOp.Negate => -v,
-                    UnaryOp.Not => v != 0.0 ? 0.0 : 1.0,
-                    UnaryOp.BitNot => (double)(~((long)v)),
-                    _ => throw new InvalidOperationException()
-                };
-            }
-
-            public override void Print(string indent, bool last)
-            {
-                Console.Write(indent); Console.Write(last ? "©¸©¤ " : "©À©¤ "); Console.WriteLine("Unary(" + Op + ")");
-                Operand.Print(indent + (last ? "   " : "©¦  "), true);
-            }
-        }
-
-        private enum BinaryOp
-        { Add, Sub, Mul, Div, LShift, RShift, GT, GTE, LT, LTE, EQ, NEQ, BitAnd, BitXor, BitOr, AndAnd, OrOr }
-
-        private class BinaryNode : ExprNode
-        {
-            public BinaryOp Op; public ExprNode Left; public ExprNode Right;
-
-            public BinaryNode(ExprNode l, BinaryOp op, ExprNode r, int pos)
-            { Left = l; Op = op; Right = r; Pos = pos; }
-
-            public override double Eval(Dictionary<int, double> rt)
-            {
-                switch (Op)
-                {
-                    case BinaryOp.Add: return Left.Eval(rt) + Right.Eval(rt);
-                    case BinaryOp.Sub: return Left.Eval(rt) - Right.Eval(rt);
-                    case BinaryOp.Mul: return Left.Eval(rt) * Right.Eval(rt);
-                    case BinaryOp.Div: { double rv = Right.Eval(rt); if (rv == 0) throw new DivideByZeroException(); return Left.Eval(rt) / rv; }
-                    case BinaryOp.LShift: return (double)(((long)Left.Eval(rt)) << (int)Right.Eval(rt));
-                    case BinaryOp.RShift: return (double)(((long)Left.Eval(rt)) >> (int)Right.Eval(rt));
-                    case BinaryOp.GT: return Left.Eval(rt) > Right.Eval(rt) ? 1.0 : 0.0;
-                    case BinaryOp.GTE: return Left.Eval(rt) >= Right.Eval(rt) ? 1.0 : 0.0;
-                    case BinaryOp.LT: return Left.Eval(rt) < Right.Eval(rt) ? 1.0 : 0.0;
-                    case BinaryOp.LTE: return Left.Eval(rt) <= Right.Eval(rt) ? 1.0 : 0.0;
-                    case BinaryOp.EQ: return Left.Eval(rt) == Right.Eval(rt) ? 1.0 : 0.0;
-                    case BinaryOp.NEQ: return Left.Eval(rt) != Right.Eval(rt) ? 1.0 : 0.0;
-                    case BinaryOp.BitAnd: return (double)(((long)Left.Eval(rt)) & ((long)Right.Eval(rt)));
-                    case BinaryOp.BitXor: return (double)(((long)Left.Eval(rt)) ^ ((long)Right.Eval(rt)));
-                    case BinaryOp.BitOr: return (double)(((long)Left.Eval(rt)) | ((long)Right.Eval(rt)));
-                    case BinaryOp.AndAnd: { double lv = Left.Eval(rt); if (lv == 0.0) return 0.0; double rv = Right.Eval(rt); return rv != 0.0 ? 1.0 : 0.0; }
-                    case BinaryOp.OrOr: { double lv = Left.Eval(rt); if (lv != 0.0) return 1.0; double rv = Right.Eval(rt); return rv != 0.0 ? 1.0 : 0.0; }
-                    default: throw new InvalidOperationException();
+                    while (true)
+                    {
+                        var a = ParseAssign(toks); if (a == null) { return null; }
+                        args.Add(a);
+                        if (Match(toks, TokenType.T_RP)) break;
+                        if (!Match(toks, TokenType.T_COMMA)) return null;
+                    }
                 }
+                if (func.Value.arity >= 0 && func.Value.arity != args.Count) return null;
+                return new ASTNode { Type = NodeType.N_FUNC, Pos = cur.Pos, FuncName = cur.Text, FuncPtr = func.Value.func, Args = args.ToArray(), Argc = args.Count };
             }
-
-            public override void Print(string indent, bool last)
-            {
-                Console.Write(indent); Console.Write(last ? "©¸©¤ " : "©À©¤ "); Console.WriteLine("Binary(" + Op + ")");
-                Left.Print(indent + (last ? "   " : "©¦  "), false);
-                Right.Print(indent + (last ? "   " : "©¦  "), true);
-            }
+            return ParsePrimary(toks);
         }
 
-        private class FuncNode : ExprNode
+        private static ASTNode? ParsePrimary(TokenList toks)
         {
-            public string Name; public ExprNode Arg;
-
-            public FuncNode(string name, ExprNode arg, int pos)
-            { Name = name; Arg = arg; Pos = pos; }
-
-            public override double Eval(Dictionary<int, double> rt)
-            {
-                double a = Arg.Eval(rt);
-                return Name switch
-                {
-                    "sin" => Math.Sin(a * Math.PI / 180),
-                    "cos" => Math.Cos(a * Math.PI / 180),
-                    "exp" => Math.Exp(a),
-                    _ => throw new Exception("Unknown function: " + Name)
-                };
-            }
-
-            public override void Print(string indent, bool last)
-            {
-                Console.Write(indent); Console.Write(last ? "©¸©¤ " : "©À©¤ "); Console.WriteLine("Func(" + Name + ")");
-                Arg.Print(indent + (last ? "   " : "©¦  "), true);
-            }
-        }
-
-        private class AssignNode : ExprNode
-        {
-            public int Id; public ExprNode Rhs;
-
-            public AssignNode(int id, ExprNode rhs, int pos)
-            { Id = id; Rhs = rhs; Pos = pos; }
-
-            public override double Eval(Dictionary<int, double> rt)
-            {
-                double v = Rhs.Eval(rt);
-                rt[Id] = v;
-                return v;
-            }
-
-            public override void Print(string indent, bool last)
-            {
-                Console.Write(indent); Console.Write(last ? "©¸©¤ " : "©À©¤ "); Console.WriteLine("Assign(#" + Id + ")");
-                Rhs.Print(indent + (last ? "   " : "©¦  "), true);
-            }
-        }
-
-        public Parser(List<Token> tokens, Dictionary<int, double> rtmap = null)
-        { toks = tokens; pos = 0; rt = rtmap ?? new Dictionary<int, double>(); }
-
-        private Token Peek() => pos < toks.Count ? toks[pos] : new Token(TokenType.EOF);
-
-        private Token Next() => pos < toks.Count ? toks[pos++] : new Token(TokenType.EOF);
-
-        private bool Match(TokenType t)
-        { if (Peek().Type == t) { Next(); return true; } return false; }
-
-        // top-level: parse statement (assignment or expression)
-        public (bool isAssignment, int id, double value) ParseStatement()
-        {
-            lastAssignment = false;
-            lastAssignmentId = 0;
-            // build AST then evaluate
-            ExprNode ast = ParseExpressionNode();
-            double v = ast.Eval(rt);
-            Console.WriteLine("AST:");
-            ast.Print("", true);
-            if (Peek().Type != TokenType.EOF) throw new Exception("Unexpected token");
-            return (lastAssignment, lastAssignmentId, v);
-        }
-
-        // precedence: assignment (right-assoc) -> logical OR -> AND -> bitwise OR -> XOR -> AND -> equality -> relational -> shift -> add -> mul -> unary -> primary
-        private ExprNode ParseExpressionNode() => ParseAssignNode();
-
-        // ParseExpression kept for compatibility
-        public double ParseExpression() => ParseExpressionNode().Eval(rt);
-
-        // Priority 1: assignment, right-associative; left-value must be HASH
-        private ExprNode ParseAssignNode()
-        {
-            if (Peek().Type == TokenType.HASH && pos + 1 < toks.Count && toks[pos + 1].Type == TokenType.ASSIGN)
-            {
-                var h = Next(); // consume HASH
-                int id = int.Parse(h.Text);
-                int assignPos = Peek().Pos;
-                Next(); // consume ASSIGN
-                ExprNode rhs = ParseAssignNode(); // right-assoc
-                lastAssignment = true; lastAssignmentId = id;
-                return new AssignNode(id, rhs, assignPos);
-            }
-            return ParseLogicalOrNode();
-        }
-
-        private double ParseLogicalOr()
-        {
-            throw new NotImplementedException();
-        }
-
-        private ExprNode ParseLogicalOrNode()
-        {
-            ExprNode left = ParseLogicalAndNode();
-            while (Match(TokenType.OROR))
-            {
-                ExprNode right = ParseLogicalAndNode();
-                left = new BinaryNode(left, BinaryOp.OrOr, right, left.Pos);
-            }
-            return left;
-        }
-
-        private double ParseLogicalAnd()
-        {
-            throw new NotImplementedException();
-        }
-
-        private ExprNode ParseLogicalAndNode()
-        {
-            ExprNode left = ParseBitwiseOrNode();
-            while (Match(TokenType.ANDAND))
-            {
-                ExprNode right = ParseBitwiseOrNode();
-                left = new BinaryNode(left, BinaryOp.AndAnd, right, left.Pos);
-            }
-            return left;
-        }
-
-        private double ParseBitwiseOr()
-        {
-            throw new NotImplementedException();
-        }
-
-        private ExprNode ParseBitwiseOrNode()
-        {
-            ExprNode left = ParseBitwiseXorNode();
-            while (Match(TokenType.PIPE)) { ExprNode r = ParseBitwiseXorNode(); left = new BinaryNode(left, BinaryOp.BitOr, r, left.Pos); }
-            return left;
-        }
-
-        private double ParseBitwiseXor()
-        {
-            throw new NotImplementedException();
-        }
-
-        private ExprNode ParseBitwiseXorNode()
-        {
-            ExprNode left = ParseBitwiseAndNode();
-            while (Match(TokenType.CARET)) { ExprNode r = ParseBitwiseAndNode(); left = new BinaryNode(left, BinaryOp.BitXor, r, left.Pos); }
-            return left;
-        }
-
-        private double ParseBitwiseAnd()
-        {
-            throw new NotImplementedException();
-        }
-
-        private ExprNode ParseBitwiseAndNode()
-        {
-            ExprNode left = ParseEqualityNode();
-            while (Match(TokenType.AMP)) { ExprNode r = ParseEqualityNode(); left = new BinaryNode(left, BinaryOp.BitAnd, r, left.Pos); }
-            return left;
-        }
-
-        private double ParseEquality()
-        {
-            throw new NotImplementedException();
-        }
-
-        private ExprNode ParseEqualityNode()
-        {
-            ExprNode left = ParseRelationalNode();
-            while (true)
-            {
-                if (Match(TokenType.EQ)) { ExprNode r = ParseRelationalNode(); left = new BinaryNode(left, BinaryOp.EQ, r, left.Pos); }
-                else if (Match(TokenType.NEQ)) { ExprNode r = ParseRelationalNode(); left = new BinaryNode(left, BinaryOp.NEQ, r, left.Pos); }
-                else break;
-            }
-            return left;
-        }
-
-        private double ParseRelational()
-        {
-            throw new NotImplementedException();
-        }
-
-        private ExprNode ParseRelationalNode()
-        {
-            ExprNode left = ParseShiftNode();
-            while (true)
-            {
-                if (Match(TokenType.GT)) { ExprNode r = ParseShiftNode(); left = new BinaryNode(left, BinaryOp.GT, r, left.Pos); }
-                else if (Match(TokenType.GTE)) { ExprNode r = ParseShiftNode(); left = new BinaryNode(left, BinaryOp.GTE, r, left.Pos); }
-                else if (Match(TokenType.LT)) { ExprNode r = ParseShiftNode(); left = new BinaryNode(left, BinaryOp.LT, r, left.Pos); }
-                else if (Match(TokenType.LTE)) { ExprNode r = ParseShiftNode(); left = new BinaryNode(left, BinaryOp.LTE, r, left.Pos); }
-                else break;
-            }
-            return left;
-        }
-
-        private double ParseShift()
-        {
-            throw new NotImplementedException();
-        }
-
-        private ExprNode ParseShiftNode()
-        {
-            ExprNode left = ParseAddNode();
-            while (true)
-            {
-                if (Match(TokenType.LSHIFT)) { ExprNode r = ParseAddNode(); left = new BinaryNode(left, BinaryOp.LShift, r, left.Pos); }
-                else if (Match(TokenType.RSHIFT)) { ExprNode r = ParseAddNode(); left = new BinaryNode(left, BinaryOp.RShift, r, left.Pos); }
-                else break;
-            }
-            return left;
-        }
-
-        private ExprNode ParseAddNode()
-        {
-            ExprNode left = ParseMultiplyNode();
-            while (true)
-            {
-                if (Match(TokenType.PLUS)) { ExprNode r = ParseMultiplyNode(); left = new BinaryNode(left, BinaryOp.Add, r, left.Pos); }
-                else if (Match(TokenType.MINUS)) { ExprNode r = ParseMultiplyNode(); left = new BinaryNode(left, BinaryOp.Sub, r, left.Pos); }
-                else break;
-            }
-            return left;
-        }
-
-        private ExprNode ParseMultiplyNode()
-        {
-            ExprNode left = ParseUnaryNode();
-            while (true)
-            {
-                if (Match(TokenType.MUL)) { ExprNode r = ParseUnaryNode(); left = new BinaryNode(left, BinaryOp.Mul, r, left.Pos); }
-                else if (Match(TokenType.DIV)) { ExprNode r = ParseUnaryNode(); left = new BinaryNode(left, BinaryOp.Div, r, left.Pos); }
-                else break;
-            }
-            return left;
-        }
-
-        private ExprNode ParseUnaryNode()
-        {
-            if (Match(TokenType.NOT)) { ExprNode op = ParseUnaryNode(); return new UnaryNode(UnaryOp.Not, op, op.Pos); }
-            if (Match(TokenType.TILDE)) { ExprNode op = ParseUnaryNode(); return new UnaryNode(UnaryOp.BitNot, op, op.Pos); }
-            if (Match(TokenType.MINUS)) { ExprNode op = ParseUnaryNode(); return new UnaryNode(UnaryOp.Negate, op, op.Pos); }
-            return ParsePowerNode();
-        }
-
-        private ExprNode ParsePowerNode()
-        {
-            var t = Peek();
-            if (t.Type == TokenType.IDENT && t.Text == "exp")
-            {
-                Next(); // consume 'exp'
-                if (!Match(TokenType.LP)) throw new Exception($"Expected ( after exp at position {t.Pos}");
-                ExprNode arg = ParseAssignNode();
-                if (!Match(TokenType.RP)) throw new Exception($"Expected ) after exp at position {t.Pos}");
-                return new FuncNode("exp", arg, t.Pos);
-            }
-
-            if (t.Type == TokenType.IDENT && (t.Text == "sin" || t.Text == "cos"))
-            {
-                Next(); // consume 'sin' or 'cos'
-                if (!Match(TokenType.LP)) throw new Exception($"Expected ( after {t.Text} at position {t.Pos}");
-                ExprNode arg = ParseAssignNode();
-                if (!Match(TokenType.RP)) throw new Exception($"Expected ) after {t.Text} at position {t.Pos}");
-                return new FuncNode(t.Text, arg, t.Pos);
-            }
-
-            return ParsePrimaryNode();
-        }
-
-        private ExprNode ParsePrimaryNode()
-        {
-            var t = Peek();
-            if (Match(TokenType.NUM)) return new NumberNode(t.Num, t.Pos);
-            if (Match(TokenType.HASH))
-            {
-                int id = int.Parse(t.Text);
-                return new HashNode(id, t.Pos);
-            }
-            if (Match(TokenType.IDENT))
-            {
-                throw new Exception($"Unexpected identifier '{t.Text}' at position {t.Pos}");
-            }
-            if (Match(TokenType.LP))
-            {
-                ExprNode v = ParseAssignNode();
-                if (!Match(TokenType.RP)) throw new Exception($"Expected ) at position {Peek().Pos}");
-                return v;
-            }
-
-            throw new Exception($"Unexpected token: {t} at position {t.Pos}");
-        }
-    }
-
-    private static void EvalMain()
-    {
-        var realDataBaseMap = new Dictionary<int, double>();
-        Console.WriteLine("Enter expression (empty to quit):");
-        while (true)
-        {
-            string? line = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(line)) break;
-            try
-            {
-                var parser = new Parser((new Tokenizer(line)).Tokenize(), realDataBaseMap);
-                var statement = parser.ParseStatement();
-                if (statement.isAssignment)
-                {
-                    Console.WriteLine($"Assigned #{statement.id} = {statement.value.ToString(CultureInfo.InvariantCulture)}");
-                }
-                else
-                {
-                    Console.WriteLine("Result: " + statement.value.ToString(CultureInfo.InvariantCulture));
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error: " + ex.Message);
-            }
-
-            Console.WriteLine("Enter expression (empty to quit):");
+            var t = toks.Peek();
+            if (t.Type == TokenType.T_NUM) { var tk = toks.Next(); return new ASTNode { Type = NodeType.N_NUMBER, Pos = tk.Pos, Number = tk.Num }; }
+            if (t.Type == TokenType.T_REALDB) { var tk = toks.Next(); int id = int.Parse(tk.Text!); return new ASTNode { Type = NodeType.N_REAL_DATABASE, Pos = tk.Pos, RealDataBaseId = id }; }
+            if (t.Type == TokenType.T_REALDB_LINK_DEV_REG) { var tk = toks.Next(); return new ASTNode { Type = NodeType.N_REALDB_LINK_DEV_REG, Pos = tk.Pos, LinkDevReg = tk.RealDbRef }; }
+            if (t.Type == TokenType.T_IDENT) { return null; }
+            if (Match(toks, TokenType.T_LP)) { var v = ParseAssign(toks); if (v == null) return null; if (!Match(toks, TokenType.T_RP)) return null; return v; }
+            return null;
         }
     }
 }

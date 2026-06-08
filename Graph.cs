@@ -728,6 +728,8 @@ namespace ConsoleApp1
                 Console.Write($"{v}\t{distance[v]}\t");
                 GraphAlgorithms.PrintPath(v, parent, '\0');
             }
+            // Run eval.c port tests
+            EvalTests.Run();
 
             Console.ReadLine();
         }
