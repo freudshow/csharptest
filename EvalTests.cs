@@ -4,7 +4,7 @@ namespace ConsoleApp1
 {
     public static class EvalTests
     {
-        static void AssertApprox(string expr, double expected, double eps = 1e-9)
+        private static void AssertApprox(string expr, double expected, double eps = 1e-9)
         {
             var ev = Eval.GetNewEvaluator(expr);
             if (ev == null) { Console.WriteLine($"Failed to parse: {expr}"); return; }
@@ -43,7 +43,21 @@ namespace ConsoleApp1
             AssertApprox("#42", 42.0); // GetValueByRealNo returns 42.0 and prints
             // assignment test: #1 = 5 should return 5
             AssertApprox("#1 = 5", 5);
+            AssertApprox("#(2,4,8) = #5+1", 43.0);
             Console.WriteLine("--- Eval tests done ---");
+
+            // interactive mode
+            Console.WriteLine("input expression, with .exit to quit: ");
+            while (true)
+            {
+                Console.Write("> ");
+                var input = Console.ReadLine();
+                if (input == ".exit") break;
+                var ev = Eval.GetNewEvaluator(input);
+                if (ev == null) { Console.WriteLine($"Failed to parse: {input}"); continue; }
+                double r = ev.Eval();
+                Console.WriteLine($"Result: {r}");
+            }
         }
     }
 }
