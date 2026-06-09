@@ -8,19 +8,41 @@ namespace ConsoleApp1
         {
             var ev = Eval.GetNewEvaluator(expr);
             if (ev == null) { Console.WriteLine($"Failed to parse: {expr}"); return; }
-            double r = ev.Eval();
-            if (double.IsNaN(expected))
+            try
             {
-                Console.WriteLine($"{expr} => {r} (expected NaN)");
-                return;
+                double r = ev.Eval();
+                if (double.IsNaN(expected))
+                {
+                    Console.WriteLine($"{expr} => {r} (expected NaN)");
+                    return;
+                }
+                if (Math.Abs(r - expected) > eps)
+                {
+                    Console.WriteLine($"Test FAILED: {expr} => {r} (expected {expected})");
+                }
+                else
+                {
+                    Console.WriteLine($"Test OK: {expr} => {r}");
+                }
             }
-            if (Math.Abs(r - expected) > eps)
+            catch (Exception ex)
             {
-                Console.WriteLine($"Test FAILED: {expr} => {r} (expected {expected})");
+                Console.WriteLine($"Test EXCEPTION: {expr} => {ex.Message}");
             }
-            else
+        }
+
+        private static void AssertThrows(string expr)
+        {
+            var ev = Eval.GetNewEvaluator(expr);
+            if (ev == null) { Console.WriteLine($"Failed to parse: {expr}"); return; }
+            try
             {
-                Console.WriteLine($"Test OK: {expr} => {r}");
+                var r = ev.Eval();
+                Console.WriteLine($"Test FAILED (no exception): {expr} => {r}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Test OK (threw): {expr} => {ex.Message}");
             }
         }
 
@@ -44,6 +66,8 @@ namespace ConsoleApp1
             // assignment test: #1 = 5 should return 5
             AssertApprox("#1 = 5", 5);
             AssertApprox("#(2,4,8) = #5+1", 43.0);
+
+            Eval.RunExamples();
             Console.WriteLine("--- Eval tests done ---");
 
             // interactive mode

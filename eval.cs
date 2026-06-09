@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -11,6 +11,12 @@ namespace ConsoleApp1
         T_NUM,
         T_REALDB,
         T_REALDB_LINK_DEV_REG,
+        T_IF,
+        T_ELSE,
+        T_WHILE,
+        T_FOR,
+        T_RETURN,
+        T_VAR,
         T_IDENT,
         T_PLUS,
         T_MINUS,
@@ -35,8 +41,28 @@ namespace ConsoleApp1
         T_RSHIFT,
         T_ASSIGN,
         T_COMMA,
+        T_SEMI,
+        T_LBRACE,
+        T_RBRACE,
         T_EOF,
         T_INVALID
+    }
+
+    public class ReturnException : System.Exception
+    {
+        public double Value;
+
+        public ReturnException(double v)
+        {
+            Value = v;
+        }
+    }
+
+    public class EvalException : System.Exception
+    {
+        public EvalException(string msg) : base(msg)
+        {
+        }
     }
 
     public class RealDbLinkDevReg
@@ -67,7 +93,23 @@ namespace ConsoleApp1
         public void Push(Token t) => Arr.Add(t);
     }
 
-    public enum NodeType { N_NUMBER, N_REAL_DATABASE, N_REALDB_LINK_DEV_REG, N_UNARY, N_BINARY, N_FUNC, N_ASSIGN }
+    public enum NodeType
+    {
+        N_NUMBER,
+        N_REAL_DATABASE,
+        N_REALDB_LINK_DEV_REG,
+        N_UNARY,
+        N_BINARY,
+        N_FUNC,
+        N_ASSIGN,
+        N_IF,
+        N_WHILE,
+        N_FOR,
+        N_RETURN,
+        N_BLOCK,
+        N_VAR,
+        N_VDECL
+    }
 
     public enum UnaryOp { U_NEG, U_NOT, U_BITNOT }
 
@@ -91,18 +133,31 @@ namespace ConsoleApp1
         public int Argc;
         public int AssignId;
         public ASTNode? Rhs;
+        public string? VarName;
     }
 
     public class ArithmeticEvaluator
     {
         public ASTNode Ast;
+        private List<Dictionary<string, double>> Scopes = new List<Dictionary<string, double>>();
 
         public ArithmeticEvaluator(ASTNode ast)
         {
             Ast = ast;
+            Scopes.Add(new Dictionary<string, double>());
         }
 
-        public double Eval() => EvalNode(Ast);
+        public double Eval()
+        {
+            try
+            {
+                return EvalNode(Ast);
+            }
+            catch (ReturnException rex)
+            {
+                return rex.Value;
+            }
+        }
 
         private static double Pi() => 3.14159265358979323846;
 
@@ -214,111 +269,397 @@ namespace ConsoleApp1
 
         private double EvalNode(ASTNode n)
         {
-            if (n == null) return double.NaN;
+            if (n == null)
+            {
+                return double.NaN;
+            }
+
             switch (n.Type)
             {
-                case NodeType.N_NUMBER: return n.Number;
-                case NodeType.N_REAL_DATABASE: return GetValueByRealNo(n.RealDataBaseId);
+                case NodeType.N_BLOCK:
+                    {
+                        Scopes.Add(new Dictionary<string, double>());
+
+                        double last = 0.0;
+
+                        if (n.Args != null)
+                        {
+                            foreach (var s in n.Args)
+                            {
+                                last = EvalNode(s);
+                            }
+                        }
+
+                        Scopes.RemoveAt(Scopes.Count - 1);
+
+                        return last;
+                    }
+
+                case NodeType.N_VAR:
+                    {
+                        string name = n.VarName!;
+
+                        for (int i = Scopes.Count - 1; i >= 0; --i)
+                        {
+                            if (Scopes[i].TryGetValue(name, out var val))
+                            {
+                                return val;
+                            }
+                        }
+
+                        return double.NaN;
+                    }
+
+                case NodeType.N_VDECL:
+                    {
+                        string name = n.VarName!;
+
+                        double val = 0.0;
+
+                        if (n.Child != null)
+                        {
+                            val = EvalNode(n.Child);
+                        }
+
+                        // create in current scope only; error on duplicate declaration in same scope
+                        var cur = Scopes[Scopes.Count - 1];
+
+                        if (cur.ContainsKey(name))
+                        {
+                            throw new EvalException($"Duplicate declaration of '{name}' in same scope");
+                        }
+
+                        cur[name] = val;
+
+                        return val;
+                    }
+
+                case NodeType.N_NUMBER:
+                    {
+                        return n.Number;
+                    }
+
+                case NodeType.N_REAL_DATABASE:
+                    {
+                        return GetValueByRealNo(n.RealDataBaseId);
+                    }
+
                 case NodeType.N_REALDB_LINK_DEV_REG:
                     {
                         int rtdbNo = FastGetRtdbNo(n.LinkDevReg!.LinkNo, n.LinkDevReg.DevNo, n.LinkDevReg.RegNo);
-                        if (rtdbNo < 0) return double.NaN;
+
+                        if (rtdbNo < 0)
+                        {
+                            return double.NaN;
+                        }
+
                         return GetValueByRealNo(rtdbNo);
                     }
+
                 case NodeType.N_UNARY:
                     {
                         double v = EvalNode(n.Child!);
-                        if (n.UnaryOp == UnaryOp.U_NEG) return -v;
-                        if (n.UnaryOp == UnaryOp.U_NOT) return v != 0.0 ? 0.0 : 1.0;
+
+                        if (n.UnaryOp == UnaryOp.U_NEG)
+                        {
+                            return -v;
+                        }
+
+                        if (n.UnaryOp == UnaryOp.U_NOT)
+                        {
+                            return v != 0.0 ? 0.0 : 1.0;
+                        }
+
                         return (double)(~((long)v));
                     }
+
                 case NodeType.N_BINARY:
                     {
                         switch (n.BinaryOp)
                         {
-                            case BinaryOp.B_ADD: return EvalNode(n.Left!) + EvalNode(n.Right!);
-                            case BinaryOp.B_SUB: return EvalNode(n.Left!) - EvalNode(n.Right!);
-                            case BinaryOp.B_MUL: return EvalNode(n.Left!) * EvalNode(n.Right!);
+                            case BinaryOp.B_ADD:
+                                {
+                                    return EvalNode(n.Left!) + EvalNode(n.Right!);
+                                }
+
+                            case BinaryOp.B_SUB:
+                                {
+                                    return EvalNode(n.Left!) - EvalNode(n.Right!);
+                                }
+
+                            case BinaryOp.B_MUL:
+                                {
+                                    return EvalNode(n.Left!) * EvalNode(n.Right!);
+                                }
+
                             case BinaryOp.B_DIV:
                                 {
                                     double r = EvalNode(n.Right!);
-                                    if (r == 0) return double.NaN;
+
+                                    if (r == 0)
+                                    {
+                                        return double.NaN;
+                                    }
+
                                     return EvalNode(n.Left!) / r;
                                 }
-                            case BinaryOp.B_LSHIFT: return (double)(((long)EvalNode(n.Left!)) << (int)EvalNode(n.Right!));
-                            case BinaryOp.B_RSHIFT: return (double)(((long)EvalNode(n.Left!)) >> (int)EvalNode(n.Right!));
-                            case BinaryOp.B_GT: return EvalNode(n.Left!) > EvalNode(n.Right!) ? 1.0 : 0.0;
-                            case BinaryOp.B_GTE: return EvalNode(n.Left!) >= EvalNode(n.Right!) ? 1.0 : 0.0;
-                            case BinaryOp.B_LT: return EvalNode(n.Left!) < EvalNode(n.Right!) ? 1.0 : 0.0;
-                            case BinaryOp.B_LTE: return EvalNode(n.Left!) <= EvalNode(n.Right!) ? 1.0 : 0.0;
-                            case BinaryOp.B_EQ: return EvalNode(n.Left!) == EvalNode(n.Right!) ? 1.0 : 0.0;
-                            case BinaryOp.B_NEQ: return EvalNode(n.Left!) != EvalNode(n.Right!) ? 1.0 : 0.0;
-                            case BinaryOp.B_BITAND: return (double)(((long)EvalNode(n.Left!)) & ((long)EvalNode(n.Right!)));
-                            case BinaryOp.B_BITXOR: return (double)(((long)EvalNode(n.Left!)) ^ ((long)EvalNode(n.Right!)));
-                            case BinaryOp.B_BITOR: return (double)(((long)EvalNode(n.Left!)) | ((long)EvalNode(n.Right!)));
+
+                            case BinaryOp.B_LSHIFT:
+                                {
+                                    return (double)(((long)EvalNode(n.Left!)) << (int)EvalNode(n.Right!));
+                                }
+
+                            case BinaryOp.B_RSHIFT:
+                                {
+                                    return (double)(((long)EvalNode(n.Left!)) >> (int)EvalNode(n.Right!));
+                                }
+
+                            case BinaryOp.B_GT:
+                                {
+                                    return EvalNode(n.Left!) > EvalNode(n.Right!) ? 1.0 : 0.0;
+                                }
+
+                            case BinaryOp.B_GTE:
+                                {
+                                    return EvalNode(n.Left!) >= EvalNode(n.Right!) ? 1.0 : 0.0;
+                                }
+
+                            case BinaryOp.B_LT:
+                                {
+                                    return EvalNode(n.Left!) < EvalNode(n.Right!) ? 1.0 : 0.0;
+                                }
+
+                            case BinaryOp.B_LTE:
+                                {
+                                    return EvalNode(n.Left!) <= EvalNode(n.Right!) ? 1.0 : 0.0;
+                                }
+
+                            case BinaryOp.B_EQ:
+                                {
+                                    return EvalNode(n.Left!) == EvalNode(n.Right!) ? 1.0 : 0.0;
+                                }
+
+                            case BinaryOp.B_NEQ:
+                                {
+                                    return EvalNode(n.Left!) != EvalNode(n.Right!) ? 1.0 : 0.0;
+                                }
+
+                            case BinaryOp.B_BITAND:
+                                {
+                                    return (double)(((long)EvalNode(n.Left!)) & ((long)EvalNode(n.Right!)));
+                                }
+
+                            case BinaryOp.B_BITXOR:
+                                {
+                                    return (double)(((long)EvalNode(n.Left!)) ^ ((long)EvalNode(n.Right!)));
+                                }
+
+                            case BinaryOp.B_BITOR:
+                                {
+                                    return (double)(((long)EvalNode(n.Left!)) | ((long)EvalNode(n.Right!)));
+                                }
+
                             case BinaryOp.B_ANDAND:
                                 {
                                     double lv = EvalNode(n.Left!);
-                                    if (lv == 0.0) return 0.0; // short-circuit
+
+                                    if (lv == 0.0)
+                                    {
+                                        return 0.0;
+                                    }
+
                                     double rv = EvalNode(n.Right!);
+
                                     return (rv == 0.0) ? 0.0 : 1.0;
                                 }
+
                             case BinaryOp.B_OROR:
                                 {
                                     double lv = EvalNode(n.Left!);
-                                    if (lv != 0.0) return 1.0; // short-circuit
+
+                                    if (lv != 0.0)
+                                    {
+                                        return 1.0;
+                                    }
+
                                     double rv = EvalNode(n.Right!);
+
                                     return (rv == 0.0) ? 0.0 : 1.0;
                                 }
                         }
+
                         break;
                     }
+
                 case NodeType.N_FUNC:
                     {
-                        double[] args = new double[n.Argc < 4 ? n.Argc : 4];
-                        for (int i = 0; i < n.Argc && i < 4; ++i) args[i] = EvalNode(n.Args![i]);
-                        if (n.FuncPtr == null) return double.NaN;
-                        if (n.Argc == 0)
+                        int argc = n.Argc;
+
+                        double[] args = new double[argc];
+
+                        for (int i = 0; i < argc; ++i)
                         {
-                            var f0 = (Func<double>)n.FuncPtr;
-                            return f0();
+                            args[i] = EvalNode(n.Args![i]);
                         }
-                        else if (n.Argc == 1)
+
+                        // if a compiled delegate is present, try to invoke it
+                        if (n.FuncPtr != null)
                         {
-                            var f1 = n.FuncPtr as Func<double, double>;
-                            if (f1 == null) return double.NaN;
-                            // handle degree/radian conversions similar to C version
-                            if (f1 == (Func<double, double>)Math.Sin || f1 == (Func<double, double>)Math.Cos || f1 == (Func<double, double>)Math.Tan)
+                            try
                             {
-                                return f1(args[0] * Pi() / 180.0);
+                                if (argc == 0 && n.FuncPtr is Func<double> f0)
+                                {
+                                    return f0();
+                                }
+
+                                if (argc == 1 && n.FuncPtr is Func<double, double> f1)
+                                {
+                                    // degree/radian handling for trig functions
+                                    if (n.FuncPtr == (Delegate)(Func<double, double>)Math.Sin || n.FuncPtr == (Delegate)(Func<double, double>)Math.Cos || n.FuncPtr == (Delegate)(Func<double, double>)Math.Tan)
+                                    {
+                                        return f1(args[0] * Pi() / 180.0);
+                                    }
+
+                                    if (n.FuncPtr == (Delegate)(Func<double, double>)Math.Asin || n.FuncPtr == (Delegate)(Func<double, double>)Math.Acos || n.FuncPtr == (Delegate)(Func<double, double>)Math.Atan)
+                                    {
+                                        return f1(args[0]) * 180.0 / Pi();
+                                    }
+
+                                    return f1(args[0]);
+                                }
+
+                                if (argc == 2 && n.FuncPtr is Func<double, double, double> f2)
+                                {
+                                    return f2(args[0], args[1]);
+                                }
+
+                                // fallback to DynamicInvoke for other delegate shapes
+                                object?[] boxed = args.Select(d => (object)d).ToArray();
+                                var res = n.FuncPtr.DynamicInvoke(boxed);
+
+                                return Convert.ToDouble(res);
                             }
-                            if (f1 == (Func<double, double>)Math.Asin || f1 == (Func<double, double>)Math.Acos || f1 == (Func<double, double>)Math.Atan)
+                            catch
                             {
-                                return f1(args[0]) * 180.0 / Pi();
+                                return double.NaN;
                             }
-                            return f1(args[0]);
                         }
-                        else if (n.Argc == 2)
+
+                        // try user-registered functions by name
+                        if (!string.IsNullOrEmpty(n.FuncName) && global::ConsoleApp1.Eval.TryGetUserFunction(n.FuncName!, out var ufun))
                         {
-                            var f2 = n.FuncPtr as Func<double, double, double>;
-                            if (f2 == null) return double.NaN;
-                            return f2(args[0], args[1]);
+                            try
+                            {
+                                return ufun(args);
+                            }
+                            catch
+                            {
+                                return double.NaN;
+                            }
                         }
+
                         return double.NaN;
                     }
+
+                case NodeType.N_IF:
+                    {
+                        double cv = EvalNode(n.Child!);
+
+                        if (cv != 0.0)
+                        {
+                            return EvalNode(n.Left!);
+                        }
+
+                        if (n.Right != null)
+                        {
+                            return EvalNode(n.Right);
+                        }
+
+                        return 0.0;
+                    }
+
+                case NodeType.N_WHILE:
+                    {
+                        double last = 0.0;
+
+                        while (EvalNode(n.Child!) != 0.0)
+                        {
+                            last = EvalNode(n.Left!);
+                        }
+
+                        return last;
+                    }
+
+                case NodeType.N_FOR:
+                    {
+                        double last = 0.0;
+
+                        ASTNode? init = (n.Args != null && n.Args.Length > 0) ? n.Args[0] : null;
+                        ASTNode? cond = (n.Args != null && n.Args.Length > 1) ? n.Args[1] : null;
+                        ASTNode? iter = (n.Args != null && n.Args.Length > 2) ? n.Args[2] : null;
+
+                        if (init != null)
+                        {
+                            EvalNode(init);
+                        }
+
+                        while (cond == null || EvalNode(cond) != 0.0)
+                        {
+                            last = EvalNode(n.Left!);
+
+                            if (iter != null)
+                            {
+                                EvalNode(iter);
+                            }
+                        }
+
+                        return last;
+                    }
+
+                case NodeType.N_RETURN:
+                    {
+                        double v = n.Child != null ? EvalNode(n.Child) : 0.0;
+
+                        throw new ReturnException(v);
+                    }
+
                 case NodeType.N_ASSIGN:
                     {
                         double v = EvalNode(n.Rhs!);
+
+                        if (!string.IsNullOrEmpty(n.VarName))
+                        {
+                            // assign to existing nearest scope or create in top scope
+                            for (int i = Scopes.Count - 1; i >= 0; --i)
+                            {
+                                if (Scopes[i].ContainsKey(n.VarName))
+                                {
+                                    Scopes[i][n.VarName!] = v;
+                                    return v;
+                                }
+                            }
+
+                            Scopes[Scopes.Count - 1][n.VarName!] = v;
+
+                            return v;
+                        }
+
                         if (n.AssignId >= 0)
                         {
                             SetValueByRealNo(n.AssignId, (float)v);
                         }
-                        else
+                        else if (n.LinkDevReg != null)
                         {
                             int rtdbNo = FastGetRtdbNo(n.LinkDevReg!.LinkNo, n.LinkDevReg.DevNo, n.LinkDevReg.RegNo);
-                            if (rtdbNo < 0) return double.NaN;
+
+                            if (rtdbNo < 0)
+                            {
+                                return double.NaN;
+                            }
+
                             SetValueByRealNo(rtdbNo, (float)v);
                         }
+
                         return v;
                     }
             }
@@ -328,6 +669,29 @@ namespace ConsoleApp1
 
     public static class Eval
     {
+        // user-registered functions (variadic)
+        private static readonly Dictionary<string, Func<double[], double>> UserFunctions = new Dictionary<string, Func<double[], double>>();
+
+        public static void RegisterFunction(string name, Func<double[], double> func)
+        {
+            UserFunctions[name] = func;
+        }
+
+        internal static bool TryGetUserFunction(string name, out Func<double[], double>? func)
+        {
+            return UserFunctions.TryGetValue(name, out func);
+        }
+
+        // Example usages and simple tests
+        public static void RunExamples()
+        {
+            RegisterFunction("sum", a => a.Sum());
+            var e1 = GetNewEvaluator("sum(1,2,3)"); Console.WriteLine(e1?.Eval());
+            var e2 = GetNewEvaluator("{ x = 1; x = x + 2; x }"); Console.WriteLine(e2?.Eval());
+            var e3 = GetNewEvaluator("{ i = 0; for (i = 0; i < 3; i = i + 1) { } i }"); Console.WriteLine(e3?.Eval());
+            var e4 = GetNewEvaluator("{ var x = 1; x = x + 2; x }"); Console.WriteLine(e4?.Eval());
+        }
+
         // duplicate of builtin/custom function table used by the parser
         private static readonly (string name, Delegate func, int arity)[] Builtins = new (string, Delegate, int)[] {
             ("abs", new Func<double,double>(Math.Abs),1),
@@ -390,7 +754,7 @@ namespace ConsoleApp1
             var invalid = toks.Arr.FirstOrDefault(t => t.Type == TokenType.T_INVALID);
             if (invalid != null) return null;
             toks.Idx = 0;
-            var ast = ParseAssign(toks);
+            var ast = ParseStatement(toks);
             if (ast == null) return null;
             if (toks.Peek().Type != TokenType.T_EOF) return null;
             return new ArithmeticEvaluator(ast);
@@ -398,20 +762,78 @@ namespace ConsoleApp1
 
         private static void Tokenize(string s, TokenList outList)
         {
-            int i = 0; int n = s.Length;
+            int i = 0;
+            int n = s.Length;
             while (true)
             {
-                while (i < n && char.IsWhiteSpace(s[i])) i++;
-                if (i >= n) { outList.Push(new Token { Type = TokenType.T_EOF, Pos = i }); break; }
+                while (i < n && char.IsWhiteSpace(s[i]))
+                {
+                    i++;
+                }
+
+                if (i >= n)
+                {
+                    outList.Push(new Token { Type = TokenType.T_EOF, Pos = i });
+                    break;
+                }
+
                 char c = s[i];
-                if (c == '&' && i + 1 < n && s[i + 1] == '&') { outList.Push(new Token { Type = TokenType.T_ANDAND, Text = "&&", Pos = i }); i += 2; continue; }
-                if (c == '|' && i + 1 < n && s[i + 1] == '|') { outList.Push(new Token { Type = TokenType.T_OROR, Text = "||", Pos = i }); i += 2; continue; }
-                if (c == '<' && i + 1 < n && s[i + 1] == '<') { outList.Push(new Token { Type = TokenType.T_LSHIFT, Text = "<<", Pos = i }); i += 2; continue; }
-                if (c == '>' && i + 1 < n && s[i + 1] == '>') { outList.Push(new Token { Type = TokenType.T_RSHIFT, Text = ">>", Pos = i }); i += 2; continue; }
-                if (c == '>' && i + 1 < n && s[i + 1] == '=') { outList.Push(new Token { Type = TokenType.T_GTE, Text = ">=", Pos = i }); i += 2; continue; }
-                if (c == '<' && i + 1 < n && s[i + 1] == '=') { outList.Push(new Token { Type = TokenType.T_LTE, Text = "<=", Pos = i }); i += 2; continue; }
-                if (c == '!' && i + 1 < n && s[i + 1] == '=') { outList.Push(new Token { Type = TokenType.T_NEQ, Text = "!=", Pos = i }); i += 2; continue; }
-                if (c == '=' && i + 1 < n && s[i + 1] == '=') { outList.Push(new Token { Type = TokenType.T_EQ, Text = "==", Pos = i }); i += 2; continue; }
+
+                if (c == '&' && i + 1 < n && s[i + 1] == '&')
+                {
+                    outList.Push(new Token { Type = TokenType.T_ANDAND, Text = "&&", Pos = i });
+                    i += 2;
+                    continue;
+                }
+
+                if (c == '|' && i + 1 < n && s[i + 1] == '|')
+                {
+                    outList.Push(new Token { Type = TokenType.T_OROR, Text = "||", Pos = i });
+                    i += 2;
+                    continue;
+                }
+
+                if (c == '<' && i + 1 < n && s[i + 1] == '<')
+                {
+                    outList.Push(new Token { Type = TokenType.T_LSHIFT, Text = "<<", Pos = i });
+                    i += 2;
+                    continue;
+                }
+
+                if (c == '>' && i + 1 < n && s[i + 1] == '>')
+                {
+                    outList.Push(new Token { Type = TokenType.T_RSHIFT, Text = ">>", Pos = i });
+                    i += 2;
+                    continue;
+                }
+
+                if (c == '>' && i + 1 < n && s[i + 1] == '=')
+                {
+                    outList.Push(new Token { Type = TokenType.T_GTE, Text = ">=", Pos = i });
+                    i += 2;
+                    continue;
+                }
+
+                if (c == '<' && i + 1 < n && s[i + 1] == '=')
+                {
+                    outList.Push(new Token { Type = TokenType.T_LTE, Text = "<=", Pos = i });
+                    i += 2;
+                    continue;
+                }
+
+                if (c == '!' && i + 1 < n && s[i + 1] == '=')
+                {
+                    outList.Push(new Token { Type = TokenType.T_NEQ, Text = "!=", Pos = i });
+                    i += 2;
+                    continue;
+                }
+
+                if (c == '=' && i + 1 < n && s[i + 1] == '=')
+                {
+                    outList.Push(new Token { Type = TokenType.T_EQ, Text = "==", Pos = i });
+                    i += 2;
+                    continue;
+                }
                 if (char.IsDigit(c))
                 {
                     int start = i; while (i < n && char.IsDigit(s[i])) i++;
@@ -460,7 +882,15 @@ namespace ConsoleApp1
                 }
                 if (char.IsLetter(c) || c == '_')
                 {
-                    int start = i; i++; while (i < n && (char.IsLetterOrDigit(s[i]) || s[i] == '_')) i++; var txt = s.Substring(start, i - start); outList.Push(new Token { Type = TokenType.T_IDENT, Text = txt, Pos = start }); continue;
+                    int start = i; i++; while (i < n && (char.IsLetterOrDigit(s[i]) || s[i] == '_')) i++; var txt = s.Substring(start, i - start);
+                    // keywords
+                    if (txt == "if") { outList.Push(new Token { Type = TokenType.T_IF, Text = txt, Pos = start }); continue; }
+                    if (txt == "else") { outList.Push(new Token { Type = TokenType.T_ELSE, Text = txt, Pos = start }); continue; }
+                    if (txt == "while") { outList.Push(new Token { Type = TokenType.T_WHILE, Text = txt, Pos = start }); continue; }
+                    if (txt == "for") { outList.Push(new Token { Type = TokenType.T_FOR, Text = txt, Pos = start }); continue; }
+                    if (txt == "return") { outList.Push(new Token { Type = TokenType.T_RETURN, Text = txt, Pos = start }); continue; }
+                    if (txt == "var") { outList.Push(new Token { Type = TokenType.T_VAR, Text = txt, Pos = start }); continue; }
+                    outList.Push(new Token { Type = TokenType.T_IDENT, Text = txt, Pos = start }); continue;
                 }
                 switch (c)
                 {
@@ -479,24 +909,89 @@ namespace ConsoleApp1
                     case '~': outList.Push(new Token { Type = TokenType.T_TILDE, Text = "~", Pos = i }); i++; break;
                     case '=': outList.Push(new Token { Type = TokenType.T_ASSIGN, Text = "=", Pos = i }); i++; break;
                     case ',': outList.Push(new Token { Type = TokenType.T_COMMA, Text = ",", Pos = i }); i++; break;
+                    case ';': outList.Push(new Token { Type = TokenType.T_SEMI, Text = ";", Pos = i }); i++; break;
+                    case '{': outList.Push(new Token { Type = TokenType.T_LBRACE, Text = "{", Pos = i }); i++; break;
+                    case '}': outList.Push(new Token { Type = TokenType.T_RBRACE, Text = "}", Pos = i }); i++; break;
                     default: outList.Push(new Token { Type = TokenType.T_INVALID, Pos = i }); i++; break;
                 }
             }
         }
 
         private static bool Match(TokenList t, TokenType ty)
-        { if (t.Peek().Type == ty) { t.Next(); return true; } return false; }
+        {
+            if (t.Peek().Type == ty)
+            {
+                t.Next();
+                return true;
+            }
+
+            return false;
+        }
 
         static ASTNode? ParseAssign(TokenList toks)
         {
             var cur = toks.Peek();
+            if (cur.Type == TokenType.T_IDENT && toks.Arr.Count > toks.Idx + 1 && toks.Arr[toks.Idx + 1].Type == TokenType.T_ASSIGN)
+            {
+                var h = toks.Next();
+                var a = toks.Next();
+                var rhs = ParseAssign(toks);
+
+                if (rhs == null)
+                {
+                    return null;
+                }
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_ASSIGN,
+                    Pos = a.Pos,
+                    VarName = h.Text,
+                    Rhs = rhs
+                };
+            }
+
             if (cur.Type == TokenType.T_REALDB && toks.Arr.Count > toks.Idx + 1 && toks.Arr[toks.Idx + 1].Type == TokenType.T_ASSIGN)
             {
-                var h = toks.Next(); var a = toks.Next(); var rhs = ParseAssign(toks); if (rhs == null) return null; int id = int.Parse(h.Text!); return new ASTNode { Type = NodeType.N_ASSIGN, Pos = a.Pos, AssignId = id, Rhs = rhs };
+                var h = toks.Next();
+                var a = toks.Next();
+                var rhs = ParseAssign(toks);
+
+                if (rhs == null)
+                {
+                    return null;
+                }
+
+                int id = int.Parse(h.Text!);
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_ASSIGN,
+                    Pos = a.Pos,
+                    AssignId = id,
+                    Rhs = rhs
+                };
             }
+
             if (cur.Type == TokenType.T_REALDB_LINK_DEV_REG && toks.Arr.Count > toks.Idx + 1 && toks.Arr[toks.Idx + 1].Type == TokenType.T_ASSIGN)
             {
-                var h = toks.Next(); var a = toks.Next(); var rhs = ParseAssign(toks); if (rhs == null) return null; return new ASTNode { Type = NodeType.N_ASSIGN, Pos = a.Pos, AssignId = -1, LinkDevReg = h.RealDbRef, Rhs = rhs };
+                var h = toks.Next();
+                var a = toks.Next();
+                var rhs = ParseAssign(toks);
+
+                if (rhs == null)
+                {
+                    return null;
+                }
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_ASSIGN,
+                    Pos = a.Pos,
+                    AssignId = -1,
+                    LinkDevReg = h.RealDbRef,
+                    Rhs = rhs
+                };
             }
             return ParseLogicalOr(toks);
         }
@@ -609,27 +1104,63 @@ namespace ConsoleApp1
         private static ASTNode? ParsePower(TokenList toks)
         {
             var cur = toks.Peek();
-            (string name, Delegate func, int arity)? func = null;
             if (cur.Type == TokenType.T_IDENT && cur.Text != null)
             {
-                func = FindBuiltin(cur.Text) ?? FindCustom(cur.Text);
-            }
-            if (cur.Type == TokenType.T_IDENT && func != null)
-            {
-                toks.Next(); if (!Match(toks, TokenType.T_LP)) return null;
-                var args = new List<ASTNode>();
-                if (!Match(toks, TokenType.T_RP))
+                // allow any identifier followed by '(' to be a function call (variadic)
+                // lookup builtin/custom functions if present and enforce arity for builtins/customs
+                if (toks.Arr.Count > toks.Idx + 1 && toks.Arr[toks.Idx + 1].Type == TokenType.T_LP)
                 {
-                    while (true)
+                    toks.Next();
+
+                    if (!Match(toks, TokenType.T_LP))
                     {
-                        var a = ParseAssign(toks); if (a == null) { return null; }
-                        args.Add(a);
-                        if (Match(toks, TokenType.T_RP)) break;
-                        if (!Match(toks, TokenType.T_COMMA)) return null;
+                        return null;
                     }
+
+                    var args = new List<ASTNode>();
+
+                    if (!Match(toks, TokenType.T_RP))
+                    {
+                        while (true)
+                        {
+                            var a = ParseAssign(toks);
+
+                            if (a == null)
+                            {
+                                return null;
+                            }
+
+                            args.Add(a);
+
+                            if (Match(toks, TokenType.T_RP))
+                            {
+                                break;
+                            }
+
+                            if (!Match(toks, TokenType.T_COMMA))
+                            {
+                                return null;
+                            }
+                        }
+                    }
+
+                    var f = FindBuiltin(cur.Text) ?? FindCustom(cur.Text);
+
+                    if (f != null && f.Value.arity >= 0 && f.Value.arity != args.Count)
+                    {
+                        return null;
+                    }
+
+                    return new ASTNode
+                    {
+                        Type = NodeType.N_FUNC,
+                        Pos = cur.Pos,
+                        FuncName = cur.Text,
+                        FuncPtr = f?.func,
+                        Args = args.ToArray(),
+                        Argc = args.Count
+                    };
                 }
-                if (func.Value.arity >= 0 && func.Value.arity != args.Count) return null;
-                return new ASTNode { Type = NodeType.N_FUNC, Pos = cur.Pos, FuncName = cur.Text, FuncPtr = func.Value.func, Args = args.ToArray(), Argc = args.Count };
             }
             return ParsePrimary(toks);
         }
@@ -637,12 +1168,311 @@ namespace ConsoleApp1
         private static ASTNode? ParsePrimary(TokenList toks)
         {
             var t = toks.Peek();
-            if (t.Type == TokenType.T_NUM) { var tk = toks.Next(); return new ASTNode { Type = NodeType.N_NUMBER, Pos = tk.Pos, Number = tk.Num }; }
-            if (t.Type == TokenType.T_REALDB) { var tk = toks.Next(); int id = int.Parse(tk.Text!); return new ASTNode { Type = NodeType.N_REAL_DATABASE, Pos = tk.Pos, RealDataBaseId = id }; }
-            if (t.Type == TokenType.T_REALDB_LINK_DEV_REG) { var tk = toks.Next(); return new ASTNode { Type = NodeType.N_REALDB_LINK_DEV_REG, Pos = tk.Pos, LinkDevReg = tk.RealDbRef }; }
-            if (t.Type == TokenType.T_IDENT) { return null; }
-            if (Match(toks, TokenType.T_LP)) { var v = ParseAssign(toks); if (v == null) return null; if (!Match(toks, TokenType.T_RP)) return null; return v; }
+
+            if (t.Type == TokenType.T_NUM)
+            {
+                var tk = toks.Next();
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_NUMBER,
+                    Pos = tk.Pos,
+                    Number = tk.Num
+                };
+            }
+
+            if (t.Type == TokenType.T_REALDB)
+            {
+                var tk = toks.Next();
+                int id = int.Parse(tk.Text!);
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_REAL_DATABASE,
+                    Pos = tk.Pos,
+                    RealDataBaseId = id
+                };
+            }
+
+            if (t.Type == TokenType.T_REALDB_LINK_DEV_REG)
+            {
+                var tk = toks.Next();
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_REALDB_LINK_DEV_REG,
+                    Pos = tk.Pos,
+                    LinkDevReg = tk.RealDbRef
+                };
+            }
+
+            if (t.Type == TokenType.T_IDENT)
+            {
+                var tk = toks.Next();
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_VAR,
+                    Pos = tk.Pos,
+                    VarName = tk.Text
+                };
+            }
+
+            if (t.Type == TokenType.T_IF)
+            {
+                var tk = toks.Next();
+
+                if (!Match(toks, TokenType.T_LP))
+                {
+                    return null;
+                }
+
+                var cond = ParseAssign(toks);
+
+                if (cond == null)
+                {
+                    return null;
+                }
+
+                if (!Match(toks, TokenType.T_RP))
+                {
+                    return null;
+                }
+
+                var thenNode = ParseAssign(toks);
+
+                if (thenNode == null)
+                {
+                    return null;
+                }
+
+                ASTNode? elseNode = null;
+
+                if (Match(toks, TokenType.T_ELSE))
+                {
+                    elseNode = ParseAssign(toks);
+
+                    if (elseNode == null)
+                    {
+                        return null;
+                    }
+                }
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_IF,
+                    Pos = tk.Pos,
+                    Child = cond,
+                    Left = thenNode,
+                    Right = elseNode
+                };
+            }
+
+            if (t.Type == TokenType.T_WHILE)
+            {
+                var tk = toks.Next();
+
+                if (!Match(toks, TokenType.T_LP))
+                {
+                    return null;
+                }
+
+                var cond = ParseAssign(toks);
+
+                if (cond == null)
+                {
+                    return null;
+                }
+
+                if (!Match(toks, TokenType.T_RP))
+                {
+                    return null;
+                }
+
+                var body = ParseAssign(toks);
+
+                if (body == null)
+                {
+                    return null;
+                }
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_WHILE,
+                    Pos = tk.Pos,
+                    Child = cond,
+                    Left = body
+                };
+            }
+
+            if (t.Type == TokenType.T_FOR)
+            {
+                var tk = toks.Next();
+
+                if (!Match(toks, TokenType.T_LP))
+                {
+                    return null;
+                }
+
+                ASTNode? init = null;
+                ASTNode? cond = null;
+                ASTNode? iter = null;
+
+                if (!Match(toks, TokenType.T_SEMI))
+                {
+                    init = ParseAssign(toks);
+
+                    if (init == null)
+                    {
+                        return null;
+                    }
+
+                    if (!Match(toks, TokenType.T_SEMI))
+                    {
+                        return null;
+                    }
+                }
+
+                if (!Match(toks, TokenType.T_SEMI))
+                {
+                    cond = ParseAssign(toks);
+
+                    if (cond == null)
+                    {
+                        return null;
+                    }
+
+                    if (!Match(toks, TokenType.T_SEMI))
+                    {
+                        return null;
+                    }
+                }
+
+                if (!Match(toks, TokenType.T_RP))
+                {
+                    iter = ParseAssign(toks);
+
+                    if (iter == null)
+                    {
+                        return null;
+                    }
+
+                    if (!Match(toks, TokenType.T_RP))
+                    {
+                        return null;
+                    }
+                }
+
+                var body = ParseAssign(toks);
+
+                if (body == null)
+                {
+                    return null;
+                }
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_FOR,
+                    Pos = tk.Pos,
+                    Args = new ASTNode[] { init, cond, iter },
+                    Argc = 3,
+                    Left = body
+                };
+            }
+
+            if (t.Type == TokenType.T_RETURN)
+            {
+                var tk = toks.Next();
+                ASTNode? expr = null;
+
+                var pk = toks.Peek().Type;
+
+                if (pk != TokenType.T_RP && pk != TokenType.T_EOF && pk != TokenType.T_SEMI)
+                {
+                    expr = ParseAssign(toks);
+
+                    if (expr == null)
+                    {
+                        return null;
+                    }
+                }
+
+                // optionally consume semicolon
+                Match(toks, TokenType.T_SEMI);
+
+                return new ASTNode { Type = NodeType.N_RETURN, Pos = tk.Pos, Child = expr };
+            }
+
+            if (Match(toks, TokenType.T_LP))
+            {
+                var v = ParseAssign(toks);
+
+                if (v == null)
+                {
+                    return null;
+                }
+
+                if (!Match(toks, TokenType.T_RP))
+                {
+                    return null;
+                }
+
+                return v;
+            }
+
             return null;
+        }
+
+        private static ASTNode? ParseStatement(TokenList toks)
+        {
+            if (Match(toks, TokenType.T_LBRACE))
+            {
+                var stmts = new List<ASTNode>();
+
+                while (!Match(toks, TokenType.T_RBRACE))
+                {
+                    var s = ParseStatement(toks);
+
+                    if (s == null)
+                    {
+                        return null;
+                    }
+
+                    stmts.Add(s);
+                }
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_BLOCK,
+                    Args = stmts.ToArray(),
+                    Argc = stmts.Count
+                };
+            }
+            if (Match(toks, TokenType.T_VAR))
+            {
+                var id = toks.Peek();
+                if (id.Type != TokenType.T_IDENT) return null;
+                var tk = toks.Next();
+                ASTNode? init = null;
+                if (Match(toks, TokenType.T_ASSIGN))
+                {
+                    init = ParseAssign(toks); if (init == null) return null;
+                }
+                Match(toks, TokenType.T_SEMI);
+
+                return new ASTNode
+                {
+                    Type = NodeType.N_VDECL,
+                    Pos = tk.Pos,
+                    VarName = tk.Text,
+                    Child = init
+                };
+            }
+            var node = ParseAssign(toks);
+            if (node == null) return null;
+            // optional semicolon as statement terminator
+            Match(toks, TokenType.T_SEMI);
+            return node;
         }
     }
 }
